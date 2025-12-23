@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, globalShortcut, session } from 'electron';
+import { app, BrowserWindow, screen, globalShortcut, session, ipcMain } from 'electron';
 
 // 修复 Windows 下透明窗口可能变黑的问题
 app.disableHardwareAcceleration();
@@ -10,8 +10,9 @@ const BASE_URL = isDev
   : 'https://dashboard.unendev.com'; // 生产环境：Vercel 部署
 
 let mainWindow;
+let createWindow;
 
-function createWindow() {
+function createMainWindow() {
   const {
     width: screenWidth,
     height: screenHeight,
@@ -165,8 +166,58 @@ app.on('ready', () => {
   const ses = session.fromPartition('persist:timer-widget');
   ses.clearCache().then(() => {
     console.log('🧹 Cache cleared');
-    setTimeout(createWindow, 300);
+    setTimeout(createMainWindow, 300);
   });
+});
+
+// 打开创建任务窗口
+function openCreateWindow() {
+  if (createWindow) {
+    createWindow.focus();
+    return;
+  }
+
+  const ses = session.fromPartition('persist:timer-widget');
+  
+  createWindow = new BrowserWindow({
+    width: 320,
+    height: 280,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#09090b',
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    parent: mainWindow,
+    modal: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: false,
+      session: ses,
+    },
+  });
+
+  createWindow.loadURL(`${BASE_URL}/widget/create`);
+  
+  createWindow.webContents.on('did-finish-load', () => {
+    createWindow.webContents.insertCSS(`
+      * { scrollbar-width: none !important; }
+      *::-webkit-scrollbar { display: none !important; }
+    `);
+  });
+
+  createWindow.on('closed', () => {
+    createWindow = null;
+    // 刷新主窗口以显示新任务
+    if (mainWindow) {
+      mainWindow.reload();
+    }
+  });
+}
+
+// 监听来自渲染进程的消息
+ipcMain.on('open-create-window', () => {
+  openCreateWindow();
 });
 
 app.on('window-all-closed', function () {
@@ -178,6 +229,6 @@ app.on('window-all-closed', function () {
 
 app.on('activate', function () {
   if (mainWindow === null) {
-    createWindow();
+    createMainWindow();
   }
 });
