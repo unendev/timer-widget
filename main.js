@@ -1,7 +1,10 @@
-import { app, BrowserWindow, screen, globalShortcut, session, ipcMain } from 'electron';
+import { app, BrowserWindow, screen, globalShortcut, session, ipcMain, Menu } from 'electron';
 
 // 修复 Windows 下透明窗口可能变黑的问题
 app.disableHardwareAcceleration();
+
+// 隐藏菜单栏
+Menu.setApplicationMenu(null);
 
 // 环境配置
 const isDev = !app.isPackaged;
@@ -37,14 +40,23 @@ function createMainWindow() {
     resizable: true,
     minWidth: 200,
     minHeight: 100,
-    skipTaskbar: true, // 隐藏任务栏图标
-    show: false, // 先不显示，等准备好再显示
+    skipTaskbar: true,
+    show: false,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: false,
+      contextIsolation: true,
       session: ses,
-      enableRemoteModule: false,
     },
+  });
+
+  // 拦截 window.open 调用，使用自定义无边框窗口
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.log('🔵 [setWindowOpenHandler] 拦截到 window.open:', url);
+    if (url.includes('/widget/create')) {
+      openCreateWindow();
+      return { action: 'deny' }; // 阻止默认行为
+    }
+    return { action: 'allow' };
   });
 
   // 监听所有网络请求
@@ -176,45 +188,63 @@ app.on('ready', () => {
 
 // 打开创建任务窗口
 function openCreateWindow() {
+  console.log('🔵 [openCreateWindow] 函数被调用');
+  
   if (createWindow) {
+    console.log('🔵 [openCreateWindow] 窗口已存在，聚焦');
     createWindow.focus();
     return;
   }
 
+  console.log('🔵 [openCreateWindow] 创建新窗口...');
   const ses = session.fromPartition('persist:timer-widget');
   
-  createWindow = new BrowserWindow({
+  const windowOptions = {
     width: 500,
-    height: 700,
+    height: 810,
+    title: '新建任务',
     frame: false,
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
     transparent: false,
-    backgroundColor: '#09090b',
+    backgroundColor: '#111827',
     alwaysOnTop: true,
     resizable: true,
     minWidth: 400,
-    minHeight: 500,
+    minHeight: 700,
     skipTaskbar: true,
-    parent: mainWindow,
-    modal: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,
       session: ses,
     },
-  });
+  };
+  
+  console.log('🔵 [openCreateWindow] 窗口配置:', JSON.stringify(windowOptions, null, 2));
+  
+  createWindow = new BrowserWindow(windowOptions);
+
+  console.log('🔵 [openCreateWindow] 窗口创建完成，frame:', createWindow.isFrameless ? '无边框' : '有边框');
+
+  // 确保移除菜单
+  createWindow.setMenu(null);
+  createWindow.removeMenu();
 
   createWindow.loadURL(`${BASE_URL}/widget/create`);
+  console.log('🔵 [openCreateWindow] 加载URL:', `${BASE_URL}/widget/create`);
   
   createWindow.webContents.on('did-finish-load', () => {
+    console.log('🔵 [openCreateWindow] 页面加载完成');
     createWindow.webContents.insertCSS(`
       * { scrollbar-width: none !important; }
       *::-webkit-scrollbar { display: none !important; }
     `);
+    createWindow.setTitle('新建任务');
   });
 
   createWindow.on('closed', () => {
+    console.log('🔵 [openCreateWindow] 窗口关闭');
     createWindow = null;
-    // 刷新主窗口以显示新任务
     if (mainWindow) {
       mainWindow.reload();
     }
