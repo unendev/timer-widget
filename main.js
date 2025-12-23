@@ -18,9 +18,9 @@ function createMainWindow() {
     height: screenHeight,
   } = screen.getPrimaryDisplay().workAreaSize;
 
-  // 初始位置在右下角
-  const windowWidth = 280;
-  const windowHeight = 160;
+  // 初始位置在右上角
+  const windowWidth = 300;
+  const windowHeight = 400;
 
   // 配置 session 以正确处理 cookie
   const ses = session.fromPartition('persist:timer-widget');
@@ -84,8 +84,8 @@ function createMainWindow() {
     } else if (url.includes('/widget/timer')) {
       console.log('✅ Detected widget page, resizing window...');
       const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
-      mainWindow.setSize(280, 160);
-      mainWindow.setPosition(screenWidth - 300, 20);
+      mainWindow.setSize(300, 400);
+      mainWindow.setPosition(screenWidth - 320, 20);
     } else if (
       url === `${BASE_URL}/` ||
       url === BASE_URL ||
