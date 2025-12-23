@@ -174,7 +174,7 @@ app.on('ready', () => {
   });
 });
 
-// 打开创建任务窗口
+// 打开创建任务窗口（直接打开 /log 页面）
 function openCreateWindow() {
   if (createWindow) {
     createWindow.focus();
@@ -184,16 +184,14 @@ function openCreateWindow() {
   const ses = session.fromPartition('persist:timer-widget');
   
   createWindow = new BrowserWindow({
-    width: 400,
-    height: 520,
-    frame: false,
+    width: 1200,
+    height: 800,
+    frame: true, // 有边框，方便操作
     transparent: false,
     backgroundColor: '#09090b',
-    alwaysOnTop: true,
-    resizable: false,
-    skipTaskbar: true,
-    parent: mainWindow,
-    modal: false,
+    alwaysOnTop: false, // 不置顶，方便切换
+    resizable: true,
+    skipTaskbar: false, // 显示在任务栏
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: false,
@@ -201,7 +199,7 @@ function openCreateWindow() {
     },
   });
 
-  createWindow.loadURL(`${BASE_URL}/widget/create`);
+  createWindow.loadURL(`${BASE_URL}/log`);
   
   createWindow.webContents.on('did-finish-load', () => {
     createWindow.webContents.insertCSS(`
