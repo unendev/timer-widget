@@ -77,10 +77,14 @@ function createMainWindow() {
   mainWindow.webContents.on('did-navigate', (event, url) => {
     console.log('📍 did-navigate:', url);
 
-    if (url.includes('/auth/signin') || url.includes('/auth/register')) {
-      console.log('🔐 Detected login page, resizing window...');
-      mainWindow.setSize(400, 500);
+    if (url.includes('/widget/login')) {
+      console.log('🔐 Detected widget login page, resizing window...');
+      mainWindow.setSize(320, 380);
       mainWindow.center();
+    } else if (url.includes('/auth/signin') || url.includes('/auth/register')) {
+      // 如果意外跳转到主登录页，重定向到 widget 登录页
+      console.log('🔄 Redirecting to widget login...');
+      mainWindow.loadURL(`${BASE_URL}/widget/login`);
     } else if (url.includes('/widget/timer')) {
       console.log('✅ Detected widget page, resizing window...');
       const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
