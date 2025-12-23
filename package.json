@@ -1,0 +1,43 @@
+{
+  "name": "timer-widget",
+  "version": "1.0.0",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable --publish never"
+  },
+  "build": {
+    "appId": "com.unendev.timer-widget",
+    "productName": "Timer Widget",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": ["portable"],
+      "icon": "icon.ico"
+    },
+    "portable": {
+      "artifactName": "TimerWidget-${version}.exe"
+    }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
+  "keywords": [],
+  "author": "unendev",
+  "license": "ISC",
+  "description": "Desktop timer widget for Project Nexus",
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^25.1.8"
+  }
+}
