@@ -184,11 +184,11 @@ function openCreateWindow() {
   const ses = session.fromPartition('persist:timer-widget');
   
   createWindow = new BrowserWindow({
-    width: 340,
-    height: 420,
+    width: 400,
+    height: 520,
     frame: false,
     transparent: false,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#09090b',
     alwaysOnTop: true,
     resizable: false,
     skipTaskbar: true,
