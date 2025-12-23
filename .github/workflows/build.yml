@@ -51,8 +51,9 @@ jobs:
           echo "DATE=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> $env:GITHUB_OUTPUT
       
       - name: Create Release
-        if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v1
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}-${{ github.run_number }}
           name: Timer Widget v${{ steps.version.outputs.VERSION }} - Build ${{ github.run_number }}
