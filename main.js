@@ -184,15 +184,13 @@ function openCreateWindow() {
   const ses = session.fromPartition('persist:timer-widget');
   
   createWindow = new BrowserWindow({
-    width: 500,
-    height: 650,
+    width: 340,
+    height: 420,
     frame: false,
     transparent: false,
-    backgroundColor: '#09090b',
+    backgroundColor: '#1a1a1a',
     alwaysOnTop: true,
-    resizable: true,
-    minWidth: 400,
-    minHeight: 500,
+    resizable: false,
     skipTaskbar: true,
     parent: mainWindow,
     modal: false,
@@ -203,7 +201,7 @@ function openCreateWindow() {
     },
   });
 
-  createWindow.loadURL(`${BASE_URL}/log?action=create`);
+  createWindow.loadURL(`${BASE_URL}/widget/create`);
   
   createWindow.webContents.on('did-finish-load', () => {
     createWindow.webContents.insertCSS(`
