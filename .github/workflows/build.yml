@@ -52,8 +52,6 @@ jobs:
       
       - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}-${{ github.run_number }}
           name: Timer Widget v${{ steps.version.outputs.VERSION }} - Build ${{ github.run_number }}
