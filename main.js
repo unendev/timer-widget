@@ -1,41 +1,96 @@
 import { app, BrowserWindow, screen, globalShortcut, session, ipcMain, Menu } from 'electron';
 
-// 修复 Windows 下透明窗口可能变黑的问题
 app.disableHardwareAcceleration();
-
-// 隐藏菜单栏
 Menu.setApplicationMenu(null);
 
-// 环境配置
 const isDev = !app.isPackaged;
-const BASE_URL = isDev
-  ? 'http://localhost:10000' // 开发环境：本地 Next.js
-  : 'https://dashboard.unendev.com'; // 生产环境：Vercel 部署
+const BASE_URL = isDev ? 'http://localhost:10000' : 'https://dashboard.unendev.com';
 
 let mainWindow;
 let createWindow;
+let memoWindow;
+let todoWindow;
+let aiWindow;
+let settingsWindow;
+
+// 通用窗口创建函数
+function createToolWindow(type, existingWindow) {
+  if (existingWindow) {
+    existingWindow.focus();
+    return existingWindow;
+  }
+
+  const ses = session.fromPartition('persist:timer-widget');
+  const configs = {
+    memo: { width: 320, height: 450, title: '备忘录', url: '/widget/memo' },
+    todo: { width: 320, height: 450, title: '待办事项', url: '/widget/todo' },
+    ai: { width: 360, height: 500, title: 'AI 助手', url: '/widget/ai' },
+    settings: { width: 300, height: 350, title: '设置', url: '/widget/settings' },
+    create: { width: 500, height: 810, title: '新建任务', url: '/widget/create' },
+  };
+  const config = configs[type];
+
+  // 获取主窗口位置，新窗口在其左侧
+  let x, y;
+  if (mainWindow) {
+    const [mainX, mainY] = mainWindow.getPosition();
+    x = mainX - config.width - 10;
+    y = mainY;
+  }
+
+  const win = new BrowserWindow({
+    width: config.width,
+    height: config.height,
+    x, y,
+    title: config.title,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#1a1a1a',
+    alwaysOnTop: true,
+    resizable: true,
+    minWidth: 250,
+    minHeight: 200,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      session: ses,
+    },
+  });
+
+  win.setMenu(null);
+  win.loadURL(`${BASE_URL}${config.url}`);
+
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.insertCSS(`
+      * { scrollbar-width: none !important; }
+      *::-webkit-scrollbar { display: none !important; }
+      [data-drag="true"] { -webkit-app-region: drag; }
+      [data-drag="false"] { -webkit-app-region: no-drag; }
+    `);
+  });
+
+  return win;
+}
 
 function createMainWindow() {
-  const {
-    width: screenWidth,
-    height: screenHeight,
-  } = screen.getPrimaryDisplay().workAreaSize;
-
-  // 初始位置在右上角
+  const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
   const windowWidth = 300;
-  const windowHeight = 400;
-
-  // 配置 session 以正确处理 cookie
+  const windowHeight = 200;
   const ses = session.fromPartition('persist:timer-widget');
+
+  // 添加日志
+  console.log('📐 Screen width:', screenWidth);
+  console.log('📐 Window position:', screenWidth - windowWidth - 50, 50);
 
   mainWindow = new BrowserWindow({
     width: windowWidth,
     height: windowHeight,
-    x: screenWidth - windowWidth - 20,
-    y: 20,
+    x: screenWidth - windowWidth - 50,
+    y: 50,
     frame: false,
     transparent: false,
-    backgroundColor: '#18181b',
+    backgroundColor: '#1a1a1a',
     alwaysOnTop: true,
     resizable: true,
     minWidth: 200,
@@ -49,109 +104,84 @@ function createMainWindow() {
     },
   });
 
-  // 拦截 window.open 调用，使用自定义无边框窗口
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    console.log('🔵 [setWindowOpenHandler] 拦截到 window.open:', url);
-    if (url.includes('/widget/create')) {
+  console.log('📐 Window created, resizable:', mainWindow.isResizable());
+
+  // 拦截 window.open 调用
+  mainWindow.webContents.setWindowOpenHandler(({ url: openUrl }) => {
+    console.log('🔵 [setWindowOpenHandler] 拦截:', openUrl);
+    if (openUrl.includes('/widget/create')) {
       openCreateWindow();
-      return { action: 'deny' }; // 阻止默认行为
+      return { action: 'deny' };
+    }
+    if (openUrl.includes('/widget/memo')) {
+      openMemoWindow();
+      return { action: 'deny' };
+    }
+    if (openUrl.includes('/widget/todo')) {
+      openTodoWindow();
+      return { action: 'deny' };
+    }
+    if (openUrl.includes('/widget/settings')) {
+      openSettingsWindow();
+      return { action: 'deny' };
+    }
+    if (openUrl.includes('/widget/ai')) {
+      openAiWindow();
+      return { action: 'deny' };
     }
     return { action: 'allow' };
   });
 
-  // 监听所有网络请求
-  mainWindow.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
-    console.log('📡 Request:', details.url);
-    callback({ requestHeaders: details.requestHeaders });
-  });
-
-  // 监听响应
   mainWindow.webContents.session.webRequest.onCompleted((details) => {
     if (details.statusCode >= 400) {
       console.error(`❌ ${details.statusCode} ${details.url}`);
     }
   });
 
-  // 监听错误
-  mainWindow.webContents.on('crashed', () => {
-    console.error('❌ Renderer process crashed');
-  });
-
-  mainWindow.webContents.on('render-process-gone', (event, details) => {
-    console.error('❌ Render process gone:', details);
-  });
-
-  // 加载 Widget 页面
   console.log(`🚀 Loading: ${BASE_URL}/widget/timer`);
   mainWindow.loadURL(`${BASE_URL}/widget/timer`);
 
-  // 监听 URL 变化，检测登录页面并调整窗口大小
-  mainWindow.webContents.on('did-navigate', (event, url) => {
+  mainWindow.webContents.on('did-navigate', (_event, url) => {
     console.log('📍 did-navigate:', url);
-
     if (url.includes('/widget/login')) {
-      console.log('🔐 Detected widget login page, resizing window...');
       mainWindow.setSize(320, 380);
       mainWindow.center();
     } else if (url.includes('/auth/signin') || url.includes('/auth/register')) {
-      // 如果意外跳转到主登录页，重定向到 widget 登录页
-      console.log('🔄 Redirecting to widget login...');
       mainWindow.loadURL(`${BASE_URL}/widget/login`);
     } else if (url.includes('/widget/timer')) {
-      console.log('✅ Detected widget page, resizing window...');
-      const { width: screenWidth } = screen.getPrimaryDisplay().workAreaSize;
-      mainWindow.setSize(300, 400);
-      mainWindow.setPosition(screenWidth - 320, 20);
-    } else if (
-      url === `${BASE_URL}/` ||
-      url === BASE_URL ||
-      url.includes('/dashboard') ||
-      (url.includes('/log') && !url.includes('/auth'))
-    ) {
-      // 登录成功后被重定向到主页，自动跳转回 widget
-      console.log('🔄 Detected redirect to home, going back to widget...');
+      const { width: sw } = screen.getPrimaryDisplay().workAreaSize;
+      mainWindow.setSize(300, 200);
+      mainWindow.setPosition(sw - 350, 50);
+    } else if (url === `${BASE_URL}/` || url === BASE_URL || url.includes('/dashboard')) {
       mainWindow.loadURL(`${BASE_URL}/widget/timer`);
     }
   });
 
-  // 监听页面加载完成 - 简化逻辑，避免重复重定向
   mainWindow.webContents.on('did-finish-load', () => {
-    // 注入 CSS 隐藏滚动条
+    console.log('📄 Page loaded, injecting CSS...');
     mainWindow.webContents.insertCSS(`
-      * {
-        scrollbar-width: none !important;
-        -ms-overflow-style: none !important;
-      }
-      *::-webkit-scrollbar {
-        display: none !important;
-        width: 0 !important;
-        height: 0 !important;
-      }
-    `);
-    
-    // 页面加载完成后显示窗口
-    mainWindow.show();
-    
-    mainWindow.webContents.executeJavaScript('window.location.href').then((url) => {
-      console.log('✅ Page loaded:', url);
+      * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+      *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+      [data-drag="true"] { -webkit-app-region: drag; }
+      [data-drag="false"] { -webkit-app-region: no-drag; }
+    `).then(() => {
+      console.log('✅ CSS injected');
     });
+    
+    const [x, y] = mainWindow.getPosition();
+    const [w, h] = mainWindow.getSize();
+    console.log('📐 Final position:', x, y, 'size:', w, h);
+    
+    mainWindow.show();
   });
 
-  // 开发环境：开启 DevTools
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
-  // 注册快捷键 (仅在窗口激活时有效)
   mainWindow.on('focus', () => {
-    // F5 刷新
-    globalShortcut.register('F5', () => {
-      mainWindow.reload();
-    });
-    // Ctrl+Shift+I 打开 DevTools
-    globalShortcut.register('CommandOrControl+Shift+I', () => {
-      mainWindow.webContents.toggleDevTools();
-    });
+    globalShortcut.register('F5', () => mainWindow.reload());
+    globalShortcut.register('CommandOrControl+Shift+I', () => mainWindow.webContents.toggleDevTools());
   });
 
   mainWindow.on('blur', () => {
@@ -159,26 +189,13 @@ function createMainWindow() {
     globalShortcut.unregister('CommandOrControl+Shift+I');
   });
 
-  mainWindow.on('closed', function () {
+  mainWindow.on('closed', () => {
     mainWindow = null;
     globalShortcut.unregisterAll();
   });
-
-  // Windows 虚拟桌面支持：设置窗口属性使其跟随虚拟桌面
-  if (process.platform === 'win32') {
-    try {
-      // 使用 native 模块设置窗口属性
-      const hwnd = mainWindow.getNativeWindowHandle();
-      // 注意：这需要 native 模块支持，如果没有可以使用其他方式
-      console.log('🖥️ Window handle:', hwnd);
-    } catch (e) {
-      console.log('⚠️ Could not set virtual desktop properties');
-    }
-  }
 }
 
 app.on('ready', () => {
-  // 清除缓存，避免 chunk hash 不匹配
   const ses = session.fromPartition('persist:timer-widget');
   ses.clearCache().then(() => {
     console.log('🧹 Cache cleared');
@@ -186,85 +203,54 @@ app.on('ready', () => {
   });
 });
 
-// 打开创建任务窗口
 function openCreateWindow() {
-  console.log('🔵 [openCreateWindow] 函数被调用');
-  
-  if (createWindow) {
-    console.log('🔵 [openCreateWindow] 窗口已存在，聚焦');
-    createWindow.focus();
-    return;
-  }
-
-  console.log('🔵 [openCreateWindow] 创建新窗口...');
-  const ses = session.fromPartition('persist:timer-widget');
-  
-  const windowOptions = {
-    width: 500,
-    height: 810,
-    title: '新建任务',
-    frame: false,
-    titleBarStyle: 'hidden',
-    autoHideMenuBar: true,
-    transparent: false,
-    backgroundColor: '#111827',
-    alwaysOnTop: true,
-    resizable: true,
-    minWidth: 400,
-    minHeight: 700,
-    skipTaskbar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: false,
-      session: ses,
-    },
-  };
-  
-  console.log('🔵 [openCreateWindow] 窗口配置:', JSON.stringify(windowOptions, null, 2));
-  
-  createWindow = new BrowserWindow(windowOptions);
-
-  console.log('🔵 [openCreateWindow] 窗口创建完成，frame:', createWindow.isFrameless ? '无边框' : '有边框');
-
-  // 确保移除菜单
-  createWindow.setMenu(null);
-  createWindow.removeMenu();
-
-  createWindow.loadURL(`${BASE_URL}/widget/create`);
-  console.log('🔵 [openCreateWindow] 加载URL:', `${BASE_URL}/widget/create`);
-  
-  createWindow.webContents.on('did-finish-load', () => {
-    console.log('🔵 [openCreateWindow] 页面加载完成');
-    createWindow.webContents.insertCSS(`
-      * { scrollbar-width: none !important; }
-      *::-webkit-scrollbar { display: none !important; }
-    `);
-    createWindow.setTitle('新建任务');
-  });
-
+  if (createWindow) { createWindow.focus(); return; }
+  createWindow = createToolWindow('create', null);
   createWindow.on('closed', () => {
-    console.log('🔵 [openCreateWindow] 窗口关闭');
     createWindow = null;
-    if (mainWindow) {
-      mainWindow.reload();
-    }
+    if (mainWindow) mainWindow.reload();
   });
 }
 
-// 监听来自渲染进程的消息
-ipcMain.on('open-create-window', () => {
-  openCreateWindow();
-});
+function openMemoWindow() {
+  if (memoWindow) { memoWindow.focus(); return; }
+  memoWindow = createToolWindow('memo', null);
+  memoWindow.on('closed', () => { memoWindow = null; });
+}
 
-app.on('window-all-closed', function () {
+function openTodoWindow() {
+  if (todoWindow) { todoWindow.focus(); return; }
+  todoWindow = createToolWindow('todo', null);
+  todoWindow.on('closed', () => { todoWindow = null; });
+}
+
+function openSettingsWindow() {
+  if (settingsWindow) { settingsWindow.focus(); return; }
+  settingsWindow = createToolWindow('settings', null);
+  settingsWindow.on('closed', () => { settingsWindow = null; });
+}
+
+function openAiWindow() {
+  if (aiWindow) { aiWindow.focus(); return; }
+  aiWindow = createToolWindow('ai', null);
+  // 开发模式下打开 DevTools
+  if (isDev) {
+    aiWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+  aiWindow.on('closed', () => { aiWindow = null; });
+}
+
+ipcMain.on('open-create-window', () => openCreateWindow());
+ipcMain.on('open-memo-window', () => openMemoWindow());
+ipcMain.on('open-todo-window', () => openTodoWindow());
+ipcMain.on('open-ai-window', () => openAiWindow());
+ipcMain.on('open-settings-window', () => openSettingsWindow());
+
+app.on('window-all-closed', () => {
   globalShortcut.unregisterAll();
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('activate', function () {
-  if (mainWindow === null) {
-    createMainWindow();
-  }
+app.on('activate', () => {
+  if (mainWindow === null) createMainWindow();
 });
