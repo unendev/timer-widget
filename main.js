@@ -1,4 +1,6 @@
 import { app, BrowserWindow, screen, globalShortcut, session, ipcMain, Menu } from 'electron';
+import fs from 'fs';
+import path from 'path';
 
 app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null);
@@ -12,6 +14,58 @@ let memoWindow;
 let todoWindow;
 let aiWindow;
 let settingsWindow;
+
+const windowStatePath = () => path.join(app.getPath('userData'), 'timer-window-state.json');
+
+const isValidNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const loadWindowState = (defaults) => {
+  try {
+    if (!fs.existsSync(windowStatePath())) return defaults;
+    const raw = fs.readFileSync(windowStatePath(), 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      !isValidNumber(parsed.width) ||
+      !isValidNumber(parsed.height) ||
+      !isValidNumber(parsed.x) ||
+      !isValidNumber(parsed.y)
+    ) {
+      return defaults;
+    }
+    return {
+      width: parsed.width,
+      height: parsed.height,
+      x: parsed.x,
+      y: parsed.y,
+    };
+  } catch (error) {
+    console.warn('?? Failed to load window state:', error);
+    return defaults;
+  }
+};
+
+const saveWindowState = (win) => {
+  if (!win || win.isDestroyed()) return;
+  try {
+    const { width, height, x, y } = win.getBounds();
+    const payload = { width, height, x, y };
+    fs.writeFileSync(windowStatePath(), JSON.stringify(payload));
+  } catch (error) {
+    console.warn('?? Failed to save window state:', error);
+  }
+};
+
+const normalizeBounds = (bounds, minWidth, minHeight) => {
+  const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+  const width = Math.max(bounds.width || minWidth, minWidth);
+  const height = Math.max(bounds.height || minHeight, minHeight);
+  const x = clamp(isValidNumber(bounds.x) ? bounds.x : sw - width - 50, 0, Math.max(0, sw - width));
+  const y = clamp(isValidNumber(bounds.y) ? bounds.y : 50, 0, Math.max(0, sh - height));
+  return { width, height, x, y };
+};
 
 // 通用窗口创建函数
 function createToolWindow(type, existingWindow) {
@@ -78,6 +132,13 @@ function createMainWindow() {
   const windowWidth = 300;
   const windowHeight = 200;
   const ses = session.fromPartition('persist:timer-widget');
+  const defaultBounds = {
+    width: savedBounds.width,
+    height: savedBounds.height,
+    x: savedBounds.x,
+    y: savedBounds.y,
+  };
+  const savedBounds = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
 
   // 添加日志
   console.log('📐 Screen width:', screenWidth);
@@ -149,9 +210,8 @@ function createMainWindow() {
     } else if (url.includes('/auth/signin') || url.includes('/auth/register')) {
       mainWindow.loadURL(`${BASE_URL}/widget/login`);
     } else if (url.includes('/widget/timer')) {
-      const { width: sw } = screen.getPrimaryDisplay().workAreaSize;
-      mainWindow.setSize(300, 200);
-      mainWindow.setPosition(sw - 350, 50);
+      const restored = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
+      mainWindow.setBounds(restored);
     } else if (url === `${BASE_URL}/` || url === BASE_URL || url.includes('/dashboard')) {
       mainWindow.loadURL(`${BASE_URL}/widget/timer`);
     }
@@ -178,6 +238,16 @@ function createMainWindow() {
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+
+  let saveTimeout;
+  const scheduleSave = () => {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => saveWindowState(mainWindow), 200);
+  };
+
+  mainWindow.on('resize', scheduleSave);
+  mainWindow.on('move', scheduleSave);
+  mainWindow.on('close', () => saveWindowState(mainWindow));
 
   mainWindow.on('focus', () => {
     globalShortcut.register('F5', () => mainWindow.reload());
