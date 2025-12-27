@@ -133,22 +133,23 @@ function createMainWindow() {
   const windowHeight = 200;
   const ses = session.fromPartition('persist:timer-widget');
   const defaultBounds = {
-    width: savedBounds.width,
-    height: savedBounds.height,
-    x: savedBounds.x,
-    y: savedBounds.y,
-  };
-  const savedBounds = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
-
-  // 添加日志
-  console.log('📐 Screen width:', screenWidth);
-  console.log('📐 Window position:', screenWidth - windowWidth - 50, 50);
-
-  mainWindow = new BrowserWindow({
     width: windowWidth,
     height: windowHeight,
     x: screenWidth - windowWidth - 50,
     y: 50,
+  };
+  const savedBounds = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
+  const { width, height, x, y } = savedBounds;
+
+  // 添加日志
+  console.log('📐 Screen width:', screenWidth);
+  console.log('?? Window position:', x, y);
+
+  mainWindow = new BrowserWindow({
+    width,
+    height,
+    x,
+    y,
     frame: false,
     transparent: false,
     backgroundColor: '#1a1a1a',
