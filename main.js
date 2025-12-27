@@ -1,6 +1,10 @@
 import { app, BrowserWindow, screen, globalShortcut, session, ipcMain, Menu } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null);
@@ -42,7 +46,7 @@ const loadWindowState = (defaults) => {
       y: parsed.y,
     };
   } catch (error) {
-    console.warn('?? Failed to load window state:', error);
+    console.warn('⚠️ Failed to load window state:', error);
     return defaults;
   }
 };
@@ -54,7 +58,7 @@ const saveWindowState = (win) => {
     const payload = { width, height, x, y };
     fs.writeFileSync(windowStatePath(), JSON.stringify(payload));
   } catch (error) {
-    console.warn('?? Failed to save window state:', error);
+    console.warn('⚠️ Failed to save window state:', error);
   }
 };
 
@@ -84,7 +88,6 @@ function createToolWindow(type, existingWindow) {
   };
   const config = configs[type];
 
-  // 获取主窗口位置，新窗口在其左侧
   let x, y;
   if (mainWindow) {
     const [mainX, mainY] = mainWindow.getPosition();
@@ -102,6 +105,7 @@ function createToolWindow(type, existingWindow) {
     backgroundColor: '#1a1a1a',
     alwaysOnTop: true,
     resizable: true,
+    maximizable: false, // 禁止最大化，防止触发 Win11 贴靠布局
     minWidth: 250,
     minHeight: 200,
     skipTaskbar: true,
@@ -141,10 +145,6 @@ function createMainWindow() {
   const savedBounds = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
   const { width, height, x, y } = savedBounds;
 
-  // 添加日志
-  console.log('📐 Screen width:', screenWidth);
-  console.log('?? Window position:', x, y);
-
   mainWindow = new BrowserWindow({
     width,
     height,
@@ -155,6 +155,7 @@ function createMainWindow() {
     backgroundColor: '#1a1a1a',
     alwaysOnTop: true,
     resizable: true,
+    maximizable: false, // 禁止最大化，防止拖拽到屏幕边缘触发系统放大
     minWidth: 200,
     minHeight: 100,
     skipTaskbar: true,
@@ -166,45 +167,18 @@ function createMainWindow() {
     },
   });
 
-  console.log('📐 Window created, resizable:', mainWindow.isResizable());
-
-  // 拦截 window.open 调用
   mainWindow.webContents.setWindowOpenHandler(({ url: openUrl }) => {
-    console.log('🔵 [setWindowOpenHandler] 拦截:', openUrl);
-    if (openUrl.includes('/widget/create')) {
-      openCreateWindow();
-      return { action: 'deny' };
-    }
-    if (openUrl.includes('/widget/memo')) {
-      openMemoWindow();
-      return { action: 'deny' };
-    }
-    if (openUrl.includes('/widget/todo')) {
-      openTodoWindow();
-      return { action: 'deny' };
-    }
-    if (openUrl.includes('/widget/settings')) {
-      openSettingsWindow();
-      return { action: 'deny' };
-    }
-    if (openUrl.includes('/widget/ai')) {
-      openAiWindow();
-      return { action: 'deny' };
-    }
+    if (openUrl.includes('/widget/create')) { openCreateWindow(); return { action: 'deny' }; }
+    if (openUrl.includes('/widget/memo')) { openMemoWindow(); return { action: 'deny' }; }
+    if (openUrl.includes('/widget/todo')) { openTodoWindow(); return { action: 'deny' }; }
+    if (openUrl.includes('/widget/settings')) { openSettingsWindow(); return { action: 'deny' }; }
+    if (openUrl.includes('/widget/ai')) { openAiWindow(); return { action: 'deny' }; }
     return { action: 'allow' };
   });
 
-  mainWindow.webContents.session.webRequest.onCompleted((details) => {
-    if (details.statusCode >= 400) {
-      console.error(`❌ ${details.statusCode} ${details.url}`);
-    }
-  });
-
-  console.log(`🚀 Loading: ${BASE_URL}/widget/timer`);
   mainWindow.loadURL(`${BASE_URL}/widget/timer`);
 
   mainWindow.webContents.on('did-navigate', (_event, url) => {
-    console.log('📍 did-navigate:', url);
     if (url.includes('/widget/login')) {
       mainWindow.setSize(320, 380);
       mainWindow.center();
@@ -213,26 +187,16 @@ function createMainWindow() {
     } else if (url.includes('/widget/timer')) {
       const restored = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
       mainWindow.setBounds(restored);
-    } else if (url === `${BASE_URL}/` || url === BASE_URL || url.includes('/dashboard')) {
-      mainWindow.loadURL(`${BASE_URL}/widget/timer`);
     }
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('📄 Page loaded, injecting CSS...');
     mainWindow.webContents.insertCSS(`
       * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
       *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-      [data-drag="true"] { -webkit-app-region: drag; }
-      [data-drag="false"] { -webkit-app-region: no-drag; }
-    `).then(() => {
-      console.log('✅ CSS injected');
-    });
-    
-    const [x, y] = mainWindow.getPosition();
-    const [w, h] = mainWindow.getSize();
-    console.log('📐 Final position:', x, y, 'size:', w, h);
-    
+      [data-drag="true"] { -webkit-app-region: drag !important; }
+      [data-drag="false"] { -webkit-app-region: no-drag !important; }
+    `);
     mainWindow.show();
   });
 
@@ -269,7 +233,6 @@ function createMainWindow() {
 app.on('ready', () => {
   const ses = session.fromPartition('persist:timer-widget');
   ses.clearCache().then(() => {
-    console.log('🧹 Cache cleared');
     setTimeout(createMainWindow, 300);
   });
 });
@@ -304,10 +267,7 @@ function openSettingsWindow() {
 function openAiWindow() {
   if (aiWindow) { aiWindow.focus(); return; }
   aiWindow = createToolWindow('ai', null);
-  // 开发模式下打开 DevTools
-  if (isDev) {
-    aiWindow.webContents.openDevTools({ mode: 'detach' });
-  }
+  if (isDev) aiWindow.webContents.openDevTools({ mode: 'detach' });
   aiWindow.on('closed', () => { aiWindow = null; });
 }
 
