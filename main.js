@@ -105,7 +105,7 @@ function createToolWindow(type, existingWindow) {
     backgroundColor: '#1a1a1a',
     alwaysOnTop: true,
     resizable: true,
-    maximizable: false, // 禁止最大化，防止触发 Win11 贴靠布局
+    maximizable: false,
     minWidth: 250,
     minHeight: 200,
     skipTaskbar: true,
@@ -155,7 +155,7 @@ function createMainWindow() {
     backgroundColor: '#1a1a1a',
     alwaysOnTop: true,
     resizable: true,
-    maximizable: false, // 禁止最大化，防止拖拽到屏幕边缘触发系统放大
+    maximizable: false,
     minWidth: 200,
     minHeight: 100,
     skipTaskbar: true,
@@ -185,8 +185,12 @@ function createMainWindow() {
     } else if (url.includes('/auth/signin') || url.includes('/auth/register')) {
       mainWindow.loadURL(`${BASE_URL}/widget/login`);
     } else if (url.includes('/widget/timer')) {
-      const restored = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
-      mainWindow.setBounds(restored);
+      // 只有当窗口原本处于登录页尺寸时，才恢复尺寸
+      const [w, h] = mainWindow.getSize();
+      if (w === 320 && h === 380) {
+        const restored = normalizeBounds(loadWindowState(defaultBounds), 200, 100);
+        mainWindow.setBounds(restored);
+      }
     }
   });
 
