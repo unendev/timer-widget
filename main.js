@@ -194,6 +194,14 @@ function createMainWindow() {
     }
   });
 
+  mainWindow.webContents.on('did-start-navigation', (event, url) => {
+    console.log(`[Main Process] Started navigation to: ${url}`);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Main Process] Failed to load: ${validatedURL} (${errorCode}: ${errorDescription})`);
+  });
+
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow.webContents.insertCSS(`
       * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
