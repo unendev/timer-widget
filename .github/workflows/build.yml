@@ -1,0 +1,67 @@
+name: Build Timer Widget
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Build Timer Widget
+        run: pnpm build
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimerWidget
+          path: dist/TimerWidget-*.exe
+          retention-days: 30
+      
+      - name: Get version
+        id: version
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "DATE=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" >> $env:GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}-${{ github.run_number }}
+          name: Timer Widget v${{ steps.version.outputs.VERSION }} - Build ${{ github.run_number }}
+          body: |
+            **Build Date**: ${{ steps.version.outputs.DATE }}
+            **Commit**: ${{ github.sha }}
+            
+            Automated build from GitHub Actions
+          files: dist/TimerWidget-*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
