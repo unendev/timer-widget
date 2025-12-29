@@ -7,19 +7,19 @@ import { fetcher, getApiUrl } from '@/lib/api';
 
 const openCreateWindow = () => {
   console.log('[Navigation] Opening Create window');
-  window.open('#/create', '_blank');
+  window.open(window.location.pathname + '#/create', '_blank');
 };
 const openMemoWindow = () => {
   console.log('[Navigation] Opening Memo window');
-  window.open('#/memo', '_blank');
+  window.open(window.location.pathname + '#/memo', '_blank');
 };
 const openTodoWindow = () => {
   console.log('[Navigation] Opening Todo window');
-  window.open('#/todo', '_blank');
+  window.open(window.location.pathname + '#/todo', '_blank');
 };
 const openAiWindow = () => {
   console.log('[Navigation] Opening AI window');
-  window.open('#/ai', '_blank');
+  window.open(window.location.pathname + '#/ai', '_blank');
 };
 
 function useDoubleTap(callback: () => void, delay = 300) {
