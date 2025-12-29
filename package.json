@@ -24,7 +24,7 @@
       "package.json",
       {
         "from": "dist",
-        "to": ".",
+        "to": "dist",
         "filter": [
           "**/*"
         ]
