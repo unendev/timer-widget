@@ -51,12 +51,17 @@ function loadWindow(win, route) {
   if (isDev) {
     win.loadURL(`${VITE_DEV_SERVER_URL}/#${route}`);
   } else {
-    // 使用 loadFile 替代 loadURL('file://...')，避免路径和 hash 解析问题
-    // 注意：hash 不需要 '#' 前缀，loadFile 的第二个参数接受 { hash: string }
-    // 如果传入的 route 包含 '/' 前缀（如 '/timer'），这里需要去掉，或者保留（取决于 hash 路由的配置）
-    // 通常 react-router 的 hash 模式下，hash 应该是 'timer' 或 '/timer'
-    // loadFile 内部会自动处理 '#'
-    win.loadFile(path.join(__dirname, 'index.html'), { hash: route });
+    // 强制使用绝对路径确保生产模式下能找到 index.html
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    console.log(`[Main Process] Loading window with path: ${indexPath}, hash: ${route}`);
+    if (fs.existsSync(indexPath)) {
+      win.loadFile(indexPath, { hash: route });
+    } else {
+      // 兼容直接在项目根目录运行的情况
+      const fallbackPath = path.join(__dirname, 'index.html');
+      console.log(`[Main Process] Falling back to path: ${fallbackPath}`);
+      win.loadFile(fallbackPath, { hash: route });
+    }
   }
 }
 
