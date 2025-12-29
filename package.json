@@ -14,14 +14,21 @@
     "appId": "com.unendev.timer-widget",
     "productName": "Timer Widget",
     "directories": {
-      "output": "dist",
+      "output": "release",
       "buildResources": "assets"
     },
     "files": [
       "main.js",
       "preload.cjs",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      {
+        "from": "dist",
+        "to": ".",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "win": {
       "target": [

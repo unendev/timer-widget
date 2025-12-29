@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TimerWidget
-          path: dist/TimerWidget-*.exe
+          path: release/TimerWidget-*.exe
           retention-days: 30
       
       - name: Get version
@@ -60,7 +60,7 @@ jobs:
             **Commit**: ${{ github.sha }}
             
             Automated build from GitHub Actions
-          files: dist/TimerWidget-*.exe
+          files: release/TimerWidget-*.exe
           draft: false
           prerelease: false
         env:
