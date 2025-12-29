@@ -47,11 +47,16 @@ const normalizeBounds = (bounds, minWidth, minHeight) => {
   return { width, height, x, y };
 };
 
-function getWindowUrl(route) {
+function loadWindow(win, route) {
   if (isDev) {
-    return `${VITE_DEV_SERVER_URL}/#${route}`;
+    win.loadURL(`${VITE_DEV_SERVER_URL}/#${route}`);
   } else {
-    return `file://${path.join(__dirname, 'index.html')}#${route}`;
+    // 使用 loadFile 替代 loadURL('file://...')，避免路径和 hash 解析问题
+    // 注意：hash 不需要 '#' 前缀，loadFile 的第二个参数接受 { hash: string }
+    // 如果传入的 route 包含 '/' 前缀（如 '/timer'），这里需要去掉，或者保留（取决于 hash 路由的配置）
+    // 通常 react-router 的 hash 模式下，hash 应该是 'timer' 或 '/timer'
+    // loadFile 内部会自动处理 '#'
+    win.loadFile(path.join(__dirname, 'index.html'), { hash: route });
   }
 }
 
@@ -107,7 +112,7 @@ function createToolWindow(type, existingWindow) {
     win.webContents.openDevTools({ mode: 'detach' });
   }
 
-  win.loadURL(getWindowUrl(config.route));
+  loadWindow(win, config.route);
 
   win.webContents.on('did-finish-load', () => {
     win.webContents.insertCSS(`
@@ -174,7 +179,7 @@ function createMainWindow() {
     return { action: 'allow' };
   });
 
-  mainWindow.loadURL(getWindowUrl('/timer'));
+  loadWindow(mainWindow, '/timer');
 
   mainWindow.webContents.on('did-navigate', (_event, url) => {
     if (url.includes('#/login')) {
