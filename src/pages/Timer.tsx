@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR, { mutate } from 'swr';
 import { Play, Pause, FileText, CheckSquare, Bot, GripVertical, Loader2 } from 'lucide-react';
 import { useTimerControl, TimerTask } from '@/hooks/useTimerControl';
 import { fetcher, getApiUrl } from '@/lib/api';
 
-const openCreateWindow = () => window.open('/#/create', '_blank');
-const openMemoWindow = () => window.open('/#/memo', '_blank');
-const openTodoWindow = () => window.open('/#/todo', '_blank');
-const openAiWindow = () => window.open('/#/ai', '_blank');
+const openCreateWindow = () => window.open('#/create', '_blank');
+const openMemoWindow = () => window.open('#/memo', '_blank');
+const openTodoWindow = () => window.open('#/todo', '_blank');
+const openAiWindow = () => window.open('#/ai', '_blank');
 
 function useDoubleTap(callback: () => void, delay = 300) {
   const lastTap = useRef(0);
@@ -205,9 +206,9 @@ export default function TimerPage() {
     return (
       <div className="flex flex-col items-center justify-center w-full h-full bg-[#1a1a1a] text-zinc-400 gap-3 p-4">
         <span className="text-sm">请先登录</span>
-        <a href="/#/login" className="text-sm text-emerald-400 hover:text-emerald-300 underline">
+        <Link to="/login" className="text-sm text-emerald-400 hover:text-emerald-300 underline">
           点击登录
-        </a>
+        </Link>
       </div>
     );
   }
