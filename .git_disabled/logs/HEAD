@@ -1,0 +1,28 @@
+0000000000000000000000000000000000000000 87af1b18e3cd648a92488df55b354728c6db557f helpfulcraft <a1634358912@outlook.com> 1766477349 +0800	commit (initial): initial commit
+87af1b18e3cd648a92488df55b354728c6db557f 0000000000000000000000000000000000000000 helpfulcraft <a1634358912@outlook.com> 1766477355 +0800	Branch: renamed refs/heads/master to refs/heads/main
+0000000000000000000000000000000000000000 87af1b18e3cd648a92488df55b354728c6db557f helpfulcraft <a1634358912@outlook.com> 1766477355 +0800	Branch: renamed refs/heads/master to refs/heads/main
+87af1b18e3cd648a92488df55b354728c6db557f d8104a238d6fd10abfbaa3143c9235980a21dd82 helpfulcraft <a1634358912@outlook.com> 1766477618 +0800	commit: ci: add GitHub Actions workflow for auto-build
+d8104a238d6fd10abfbaa3143c9235980a21dd82 6a434cbacb9b68f2f34e4a02b506c1943fb11c36 helpfulcraft <a1634358912@outlook.com> 1766478075 +0800	commit: ci: add pull_request trigger
+6a434cbacb9b68f2f34e4a02b506c1943fb11c36 36aec664bb0832cad97c5f01fa75370eb36eea85 helpfulcraft <a1634358912@outlook.com> 1766478644 +0800	commit: fix: use explicit exe path in workflow
+36aec664bb0832cad97c5f01fa75370eb36eea85 b8b7b10ba930e18d6e6362f0a8aa6ea727fe2844 helpfulcraft <a1634358912@outlook.com> 1766478840 +0800	commit: ci: auto-create release on every build
+b8b7b10ba930e18d6e6362f0a8aa6ea727fe2844 a61327b8eb1c248a14039de787a5a0ad839b2e77 helpfulcraft <a1634358912@outlook.com> 1766479119 +0800	commit: feat: add custom timer widget icon
+a61327b8eb1c248a14039de787a5a0ad839b2e77 fd03bb84c90fa97115635488955091ec0f7b3de7 helpfulcraft <a1634358912@outlook.com> 1766479183 +0800	commit: fix: add write permissions for release creation
+fd03bb84c90fa97115635488955091ec0f7b3de7 eb1461c16f5d6a58c6d49ea332020eb1bde5b916 helpfulcraft <a1634358912@outlook.com> 1766479733 +0800	commit: fix: only create release on manual trigger
+eb1461c16f5d6a58c6d49ea332020eb1bde5b916 d77b6403100463f6442783dc60e9fdd86e356e88 helpfulcraft <a1634358912@outlook.com> 1766479807 +0800	commit: fix: allow release step to fail gracefully
+d77b6403100463f6442783dc60e9fdd86e356e88 d0084b6d375cbce85a9894b656d1d500f29c8cb0 helpfulcraft <a1634358912@outlook.com> 1766488066 +0800	commit: feat: add create task window support
+d0084b6d375cbce85a9894b656d1d500f29c8cb0 713241c50ae3ce78c6786b1ce4df2b33d8085d10 helpfulcraft <a1634358912@outlook.com> 1766488603 +0800	commit: feat: adjust window size for new design
+713241c50ae3ce78c6786b1ce4df2b33d8085d10 7bb773eb5b56ff77facc158bf9cc440ddf9066bc helpfulcraft <a1634358912@outlook.com> 1766488653 +0800	commit: chore: update workflow
+7bb773eb5b56ff77facc158bf9cc440ddf9066bc 9374d1089b730b8bc05a47621643275cf11d5710 helpfulcraft <a1634358912@outlook.com> 1766488989 +0800	commit: feat: update URL detection for widget login
+9374d1089b730b8bc05a47621643275cf11d5710 db6d7b421fbd828d93d98208987be44af14a88bb helpfulcraft <a1634358912@outlook.com> 1766490049 +0800	commit: feat: update create window to use /log dialog
+db6d7b421fbd828d93d98208987be44af14a88bb 5505bf21c6ec1b3e9705eda933a886396fd3de1b helpfulcraft <a1634358912@outlook.com> 1766490225 +0800	commit: feat: update create window size
+5505bf21c6ec1b3e9705eda933a886396fd3de1b fc33725b7b53b6c4874911bcdfdcf4a93e1f1427 helpfulcraft <a1634358912@outlook.com> 1766490361 +0800	commit: feat: increase create window size for full features
+fc33725b7b53b6c4874911bcdfdcf4a93e1f1427 602c61c345a1bdbb058deecb5484496755e0bbb6 helpfulcraft <a1634358912@outlook.com> 1766490601 +0800	commit: feat: open /log page for task creation
+602c61c345a1bdbb058deecb5484496755e0bbb6 8ab99606b68f0783ce8f74f1ddc91603ad8b12d7 helpfulcraft <a1634358912@outlook.com> 1766491358 +0800	commit: feat: increase create window size and make resizable
+8ab99606b68f0783ce8f74f1ddc91603ad8b12d7 95570e7f03f0aa0cc4a93115a2018e19383efcfd helpfulcraft <a1634358912@outlook.com> 1766495862 +0800	commit: feat: 无边框创建窗口、拦截window.open、调整尺寸820
+95570e7f03f0aa0cc4a93115a2018e19383efcfd 93253707f9db5475697dc54c02c49465d145e1c6 helpfulcraft <a1634358912@outlook.com> 1766546896 +0800	commit: chore: bump version to 1.0.1
+93253707f9db5475697dc54c02c49465d145e1c6 b4589cf4a9a2335098a9410f23d2d043a34ae9fb helpfulcraft <a1634358912@outlook.com> 1766757847 +0800	commit: Persist timer window bounds
+b4589cf4a9a2335098a9410f23d2d043a34ae9fb 4542186ef199e9675dde7d13e78bba2bb0bbcb8a helpfulcraft <a1634358912@outlook.com> 1766802857 +0800	commit: Fix main window bounds restore
+4542186ef199e9675dde7d13e78bba2bb0bbcb8a 7b5a7c91529a055bfcc8957233f94f3fec3b3a0d helpfulcraft <a1634358912@outlook.com> 1766814435 +0800	commit: fix: disable maximizable to prevent Win11 snap layout interference
+7b5a7c91529a055bfcc8957233f94f3fec3b3a0d 848c84362afa635971258b429f5e2025c05aadf4 helpfulcraft <a1634358912@outlook.com> 1766815545 +0800	commit: fix: persist window size across navigation and refresh
+848c84362afa635971258b429f5e2025c05aadf4 9dd7380f9079e668a0cf3272740793ea00849575 helpfulcraft <a1634358912@outlook.com> 1766914748 +0800	commit: chore: push updates for timer
+9dd7380f9079e668a0cf3272740793ea00849575 0e798cab6de886ebb2e5ca99ba983f6b8048a7ea helpfulcraft <a1634358912@outlook.com> 1766925537 +0800	commit: fix: resolve preload.cjs path in packaged app
