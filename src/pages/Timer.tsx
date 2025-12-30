@@ -4,6 +4,7 @@ import useSWR, { mutate } from 'swr';
 import { Play, Pause, FileText, CheckSquare, Bot, GripVertical, Loader2 } from 'lucide-react';
 import { useTimerControl, TimerTask } from '@/hooks/useTimerControl';
 import { fetcher, getApiUrl } from '@/lib/api';
+import { getUser } from '@/lib/auth-token';
 
 const openCreateWindow = () => {
   console.log('[Navigation] Opening Create window');
@@ -45,25 +46,13 @@ function useDoubleTap(callback: () => void, delay = 300) {
   };
 }
 
-interface SessionUser {
-  id: string;
-  email?: string;
-  name?: string;
-}
-
 export default function TimerPage() {
   const doubleTapCreate = useDoubleTap(openCreateWindow);
   const [isBlurred, setIsBlurred] = useState(false);
   
-  const { data: sessionData, isLoading: sessionLoading } = useSWR<{ user?: SessionUser }>(
-    '/api/auth/session',
-    fetcher,
-    { 
-      revalidateOnFocus: false,
-    }
-  );
+  const user = getUser();
+  const userId = user?.id;
   
-  const userId = sessionData?.user?.id;
   const today = new Date().toISOString().split('T')[0];
   const apiUrl = userId ? `/api/timer-tasks?userId=${userId}&date=${today}` : null;
 
@@ -207,14 +196,6 @@ export default function TimerPage() {
     const s = totalSeconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
-
-  if (sessionLoading) {
-    return (
-      <div className="flex items-center justify-center w-full h-full bg-[#1a1a1a]">
-        <span className="text-sm text-zinc-500">加载中...</span>
-      </div>
-    );
-  }
 
   if (!userId) {
     return (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getApiUrl } from '../lib/api';
-import { setToken } from '../lib/auth-token';
+import { setToken, setUser } from '../lib/auth-token';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -35,6 +35,9 @@ export default function LoginPage() {
         setError(data.error || '登录失败');
       } else if (data.token) {
         setToken(data.token);
+        if (data.user) {
+          setUser(data.user);
+        }
         console.log('[Login] Success, token stored');
         navigate('/timer');
       } else {

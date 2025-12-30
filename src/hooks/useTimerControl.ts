@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import { getDeviceId } from '@/lib/device-fingerprint';
+import { fetchWithRetry } from '@/lib/fetch-utils';
 
 export interface TimerTask {
   id: string;
@@ -155,7 +156,7 @@ export function useTimerControl(options: UseTimerControlOptions) {
           const runningTime = runningTask.startTime ? currentTime - runningTask.startTime : 0;
           const currentVersion = versionMap.get(runningTask.id) ?? runningTask.version;
           
-          const pauseResponse = await fetch(`/api/timer-tasks`, {
+          const pauseResponse = await fetchWithRetry('/api/timer-tasks', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -202,7 +203,7 @@ export function useTimerControl(options: UseTimerControlOptions) {
 
       const targetVersion = versionMap.get(taskId) ?? targetTask.version;
       
-      const startResponse = await fetch(`/api/timer-tasks`, {
+      const startResponse = await fetchWithRetry('/api/timer-tasks', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -274,7 +275,7 @@ export function useTimerControl(options: UseTimerControlOptions) {
       );
       onTasksChange(updatedTasks);
 
-      const response = await fetch(`/api/timer-tasks`, {
+      const response = await fetchWithRetry('/api/timer-tasks', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +336,7 @@ export function useTimerControl(options: UseTimerControlOptions) {
       );
       onTasksChange(updatedTasks);
 
-      const response = await fetch(`/api/timer-tasks`, {
+      const response = await fetchWithRetry('/api/timer-tasks', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
