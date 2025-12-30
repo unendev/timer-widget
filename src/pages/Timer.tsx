@@ -51,6 +51,7 @@ export default function TimerPage() {
   const [isBlurred, setIsBlurred] = useState(false);
   
   const user = getUser();
+  console.log('[Timer Debug] getUser() result:', user);
   const userId = user?.id;
   
   const today = new Date().toISOString().split('T')[0];
