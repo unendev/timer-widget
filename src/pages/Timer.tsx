@@ -53,8 +53,9 @@ export default function TimerPage() {
   const user = getUser();
   const userId = user?.id;
   
-  // 移除日期过滤，显示所有任务
-  const apiUrl = userId ? `/api/timer-tasks?userId=${userId}` : null;
+  // 恢复日期过滤，只显示今天的任务（保持界面简洁）
+  const today = new Date().toISOString().split('T')[0];
+  const apiUrl = userId ? `/api/timer-tasks?userId=${userId}&date=${today}` : null;
 
   const { data: tasks = [], mutate: mutateTasks } = useSWR<TimerTask[]>(
     apiUrl,
