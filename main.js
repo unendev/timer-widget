@@ -12,6 +12,54 @@ Menu.setApplicationMenu(null);
 const isDev = !app.isPackaged;
 const VITE_DEV_SERVER_URL = 'http://localhost:5173';
 
+process.on('uncaughtException', (error) => {
+  console.error('[Main Process] Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[Main Process] Unhandled Rejection:', reason);
+});
+
+// 手动拦截并保存 Cookie，解决 file:// 协议下无法保存 localhost Cookie 的问题
+app.on('ready', () => {
+  const ses = session.fromPartition('persist:timer-widget');
+  
+  // 拦截所有来自 API 的响应头
+  ses.webRequest.onHeadersReceived(
+    { urls: ['http://localhost:3000/api/*'] },
+    (details, callback) => {
+      const { responseHeaders } = details;
+      if (responseHeaders) {
+        // 获取 Set-Cookie 头（注意处理大小写）
+        const cookies = responseHeaders['set-cookie'] || responseHeaders['Set-Cookie'];
+        if (cookies && cookies.length > 0) {
+          console.log('[Main Process] Intercepted Cookies:', cookies);
+          cookies.forEach(cookieStr => {
+            // 简单的 Cookie 解析
+            const parts = cookieStr.split(';');
+            const [name, value] = parts[0].split('=');
+            if (name && value) {
+              const cookieDetails = {
+                url: 'http://localhost:3000', // 关键：将 Cookie 绑定到 API 域名
+                name: name.trim(),
+                value: value.trim(),
+                // 默认设置一些宽松的属性
+                path: '/',
+                sameSite: 'no_restriction'
+              };
+              
+              ses.cookies.set(cookieDetails)
+                .then(() => console.log(`[Main Process] Saved cookie: ${name}`))
+                .catch((err) => console.error(`[Main Process] Failed to save cookie ${name}:`, err));
+            }
+          });
+        }
+      }
+      callback({ responseHeaders });
+    }
+  );
+});
+
 const windowStatePath = () => path.join(app.getPath('userData'), 'timer-window-state.json');
 
 const isValidNumber = (value) => typeof value === 'number' && Number.isFinite(value);
@@ -108,6 +156,7 @@ function createToolWindow(type, existingWindow) {
       contextIsolation: true,
       session: ses,
       preload: path.join(__dirname, 'preload.cjs'),
+      webSecurity: false, // 允许本地文件处理 Cookie 和跨域
     },
   });
 

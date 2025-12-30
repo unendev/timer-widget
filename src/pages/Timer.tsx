@@ -58,7 +58,9 @@ export default function TimerPage() {
   const { data: sessionData, isLoading: sessionLoading } = useSWR<{ user?: SessionUser }>(
     '/api/auth/session',
     fetcher,
-    { revalidateOnFocus: false }
+    { 
+      revalidateOnFocus: false,
+    }
   );
   
   const userId = sessionData?.user?.id;
