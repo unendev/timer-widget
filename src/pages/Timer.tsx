@@ -51,11 +51,10 @@ export default function TimerPage() {
   const [isBlurred, setIsBlurred] = useState(false);
   
   const user = getUser();
-  console.log('[Timer Debug] getUser() result:', user);
   const userId = user?.id;
   
-  const today = new Date().toISOString().split('T')[0];
-  const apiUrl = userId ? `/api/timer-tasks?userId=${userId}&date=${today}` : null;
+  // 移除日期过滤，显示所有任务
+  const apiUrl = userId ? `/api/timer-tasks?userId=${userId}` : null;
 
   const { data: tasks = [], mutate: mutateTasks } = useSWR<TimerTask[]>(
     apiUrl,

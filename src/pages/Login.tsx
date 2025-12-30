@@ -30,7 +30,6 @@ export default function LoginPage() {
       });
 
       const data = await response.json();
-      console.log('[Login Debug] API Response:', data);
 
       if (!response.ok) {
         setError(data.error || '登录失败');
