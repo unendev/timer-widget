@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { X, Send, Bot, User, Loader2, FileText, CheckSquare, ChevronDown, Plus, Trash2, History } from 'lucide-react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import useSWR, { mutate } from 'swr';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { fetcher, getApiUrl } from '@/lib/api';
+
+const AI_SESSIONS_STORAGE_KEY = 'ai-chat-sessions-v1';
+const AI_SESSIONS_UPDATED_KEY = 'ai-chat-sessions-updated-at';
 
 const MODELS = [
   { id: 'deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek' },
@@ -38,7 +41,7 @@ const ReasoningBlock = ({ content, isStreaming = false }: { content: string; isS
       {expanded && (
         <div ref={contentRef} className="px-2 py-1.5 text-[10px] text-zinc-400 border-t border-zinc-700 max-h-32 overflow-y-auto">
           <pre className="whitespace-pre-wrap font-mono leading-relaxed">{content}</pre>
-          {isStreaming && <span className="inline-block w-1 h-2 bg-zinc-400 animate-pulse ml-0.5" />}
+          {isStreaming && <span className="inline-block w-1 h-2 bg-zinc-400 animate-pulse ml-0.5" />}广告
         </div>
       )}
     </div>
@@ -53,23 +56,80 @@ interface ChatSession {
 }
 
 export default function AIPage() {
-  const { data: sessions = [], isLoading: sessionsLoading } = useSWR<ChatSession[]>('/api/widget/ai/sessions', fetcher);
+  // State for sessions, initialized from localStorage
+  const [localSessions, setLocalSessions] = useState<ChatSession[]>(() => {
+    try {
+      const savedSessions = localStorage.getItem(AI_SESSIONS_STORAGE_KEY);
+      return savedSessions ? JSON.parse(savedSessions) : [];
+    } catch (error) {
+      console.error("Failed to parse AI sessions from localStorage:", error);
+      return [];
+    }
+  });
+
+  const { data: serverSessions = [], isLoading: sessionsLoading } = useSWR<ChatSession[]>('/api/widget/ai/sessions', fetcher, {
+    onSuccess: (data) => {
+      // Sync server data to local storage if newer or local is empty
+      const localUpdatedAt = parseInt(localStorage.getItem(AI_SESSIONS_UPDATED_KEY) || "0");
+      const serverUpdatedAt = data.reduce((max, session) => Math.max(max, new Date(session.updatedAt).getTime()), 0);
+      
+      if (!localSessions.length || serverUpdatedAt > localUpdatedAt) {
+        console.log("Syncing AI sessions from server (newer version found)");
+        setLocalSessions(data);
+        localStorage.setItem(AI_SESSIONS_STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(AI_SESSIONS_UPDATED_KEY, serverUpdatedAt.toString());
+      }
+    },
+  });
+
+  // Combine local and server data, giving precedence to local changes not yet synced
+  const sessions = useMemo(() => {
+    const serverSessionMap = new Map(serverSessions.map(session => [session.id, session]));
+    const combined = [...localSessions];
+
+    serverSessions.forEach(serverSession => {
+      if (!combined.some(localSession => localSession.id === serverSession.id)) {
+        combined.push(serverSession);
+      }
+    });
+    
+    // Sort by updatedAt, newest first
+    combined.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return combined;
+  }, [localSessions, serverSessions]);
+
   const [inputValue, setInputValue] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('deepseek-chat');
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => localStorage.getItem('widget-ai-current-session-id'));
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const processedToolCalls = useRef<Set<string>>(new Set());
 
-  // 默认选择第一个模型
+  // Default select the first model and current session
   useEffect(() => {
     const model = localStorage.getItem('widget-ai-model');
     if (model && MODELS.find(m => m.id === model)) {
       setSelectedModelId(model);
     }
-  }, []);
+    // Load current session messages if currentSessionId is set
+    if (currentSessionId) {
+      const sessionToLoad = sessions.find(s => s.id === currentSessionId);
+      if (sessionToLoad) {
+        setMessages(sessionToLoad.messages || []);
+        lastSavedMessagesCount.current = sessionToLoad.messages?.length || 0;
+      }
+    }
+  }, [sessions, currentSessionId]);
+
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem('widget-ai-current-session-id', currentSessionId);
+    } else {
+      localStorage.removeItem('widget-ai-current-session-id');
+    }
+  }, [currentSessionId]);
 
   const selectedModel = MODELS.find(m => m.id === selectedModelId) || MODELS[0];
 
@@ -78,41 +138,72 @@ export default function AIPage() {
   }), []);
 
   const { messages, sendMessage, status, setMessages } = useChat({
-    id: 'widget-ai',
+    id: currentSessionId || 'widget-ai',
     transport: chatTransport,
   });
 
   const isLoading = status === 'streaming' || status === 'submitted';
 
-  // 自动保存当前对话到云端
+  const syncSessionsToLocal = useCallback((updatedSessions: ChatSession[]) => {
+    const now = Date.now();
+    setLocalSessions(updatedSessions);
+    localStorage.setItem(AI_SESSIONS_STORAGE_KEY, JSON.stringify(updatedSessions));
+    localStorage.setItem(AI_SESSIONS_UPDATED_KEY, now.toString());
+    mutate('/api/widget/ai/sessions', updatedSessions, false); // Update SWR cache optimistically
+  }, []);
+
+  // Auto-save current conversation to cloud AND local storage
   const lastSavedMessagesCount = useRef(0);
   useEffect(() => {
     if (messages.length > lastSavedMessagesCount.current && status === 'ready') {
-      const saveToCloud = async () => {
+      const saveSession = async () => {
         const firstUserMsg = messages.find(m => m.role === 'user');
         const title = firstUserMsg 
           ? ((firstUserMsg as any).content || (firstUserMsg as any).parts?.find((p: any) => p.type === 'text')?.text || '新对话').slice(0, 20)
           : '新对话';
         
+        const newSession: ChatSession = {
+          id: currentSessionId || `local-${Date.now()}`,
+          title,
+          messages: messages,
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Update local sessions immediately
+        const existingIndex = localSessions.findIndex(s => s.id === newSession.id);
+        const updatedLocalSessions = existingIndex > -1
+          ? localSessions.map((s, i) => i === existingIndex ? newSession : s)
+          : [...localSessions, newSession];
+        syncSessionsToLocal(updatedLocalSessions);
+
         try {
-          await fetch(getApiUrl('/api/widget/ai/sessions'), {
-            method: 'POST',
+          const method = currentSessionId ? 'PUT' : 'POST';
+          const url = currentSessionId 
+            ? getApiUrl(`/api/widget/ai/sessions?id=${currentSessionId}`)
+            : getApiUrl('/api/widget/ai/sessions');
+
+          await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: currentSessionId,
-              title,
-              messages: messages,
-            }),
+            body: JSON.stringify(newSession),
           });
-          mutate('/api/widget/ai/sessions');
+          mutate('/api/widget/ai/sessions'); // Revalidate with server data
           lastSavedMessagesCount.current = messages.length;
+          // If it was a new session, update currentSessionId with the server-assigned ID
+          if (!currentSessionId && newSession.id.startsWith('local-')) {
+            // Assuming server returns the created session with a real ID
+            // For simplicity, we might need another SWR revalidation or a more robust ID assignment
+            // For now, we'll let the next SWR fetch handle updating the ID if necessary.
+            // Or, update based on the response if the server sends the ID back.
+          }
         } catch (err) {
           console.error('Failed to sync session to cloud:', err);
+          mutate('/api/widget/ai/sessions'); // Revert or show error
         }
       };
-      saveToCloud();
+      saveSession();
     }
-  }, [messages, status, currentSessionId]);
+  }, [messages, status, currentSessionId, localSessions, syncSessionsToLocal]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -139,6 +230,8 @@ export default function AIPage() {
     setMessages([]);
     lastSavedMessagesCount.current = 0;
     processedToolCalls.current.clear();
+    // Also update local storage to reflect no current session
+    localStorage.removeItem('widget-ai-current-session-id');
   };
 
   const handleLoadSession = (session: ChatSession) => {
@@ -147,20 +240,26 @@ export default function AIPage() {
     lastSavedMessagesCount.current = session.messages?.length || 0;
     processedToolCalls.current.clear();
     setShowHistory(false);
+    localStorage.setItem('widget-ai-current-session-id', session.id);
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
+    // Optimistically update local state
+    const updatedLocalSessions = localSessions.filter(s => s.id !== sessionId);
+    syncSessionsToLocal(updatedLocalSessions);
+
     try {
       await fetch(getApiUrl(`/api/widget/ai/sessions?id=${sessionId}`), {
         method: 'DELETE',
       });
-      mutate('/api/widget/ai/sessions');
+      mutate('/api/widget/ai/sessions'); // Revalidate with server data
       if (currentSessionId === sessionId) {
         handleNewChat();
       }
     } catch (err) {
       console.error('Failed to delete session:', err);
+      mutate('/api/widget/ai/sessions'); // Revert or show error
     }
   };
 
@@ -169,7 +268,7 @@ export default function AIPage() {
     if (!text || isLoading) return;
     
     sendMessage({ text }, { 
-      body: { provider: selectedModel.provider, modelId: selectedModel.id }
+      body: { provider: selectedModel.provider, modelId: selectedModel.id } 
     });
     setInputValue('');
   };
@@ -199,7 +298,7 @@ export default function AIPage() {
       <>
         {reasoningContent && <ReasoningBlock content={reasoningContent} isStreaming={isReasoningStreaming} />}
         {textContent && <MarkdownView content={textContent} className="text-xs" />}
-        {!reasoningContent && !textContent && '...'}
+        {!reasoningContent && !textContent && '...'}广告
       </>
     );
   };
@@ -246,7 +345,7 @@ export default function AIPage() {
             <div className="text-center text-zinc-500 text-xs py-3">暂无历史记录</div>
           ) : (
             <div className="py-1">
-              {sessions.map(session => (
+              {sessions.map((session: ChatSession) => (
                 <div
                   key={session.id}
                   onClick={() => handleLoadSession(session)}

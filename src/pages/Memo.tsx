@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import useSWR, { mutate } from 'swr';
 import { MarkdownView } from '@/components/shared/MarkdownView';
-import { fetcher, getApiUrl } from '@/lib/api';
+import { fetcher } from '@/lib/api';
+import { fetchWithRetry } from '@/lib/fetch-utils';
+
+const MEMO_STORAGE_KEY = 'memo-content-v1';
+const MEMO_UPDATED_KEY = 'memo-updated-at';
 
 interface MemoData {
   id: string;
@@ -12,7 +16,9 @@ interface MemoData {
 
 export default function MemoPage() {
   const { data: memo, isLoading } = useSWR<MemoData>('/api/widget/memo', fetcher);
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState(() => {
+    return localStorage.getItem(MEMO_STORAGE_KEY) || '';
+  });
   const [isEditing, setIsEditing] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -20,9 +26,35 @@ export default function MemoPage() {
   // 当从服务器加载到数据时同步到本地状态
   useEffect(() => {
     if (memo) {
-      setContent(memo.content);
+      const localContent = localStorage.getItem(MEMO_STORAGE_KEY);
+      const localTime = parseInt(localStorage.getItem(MEMO_UPDATED_KEY) || '0');
+      const serverTime = new Date(memo.updatedAt).getTime();
+
+      // 1. 如果本地为空，直接使用云端数据
+      if (!localContent) {
+        setContent(memo.content);
+        localStorage.setItem(MEMO_STORAGE_KEY, memo.content);
+        localStorage.setItem(MEMO_UPDATED_KEY, serverTime.toString());
+        return;
+      }
+
+      // 2. 如果内容一致，不需要更新（更新时间戳以保持同步）
+      if (localContent === memo.content) {
+        if (serverTime > localTime) {
+          localStorage.setItem(MEMO_UPDATED_KEY, serverTime.toString());
+        }
+        return;
+      }
+
+      // 3. 如果云端更新且时间比本地晚（且用户当前未在编辑），则更新本地
+      if (serverTime > localTime && !isEditing) {
+        console.log('Syncing from server (newer version found)');
+        setContent(memo.content);
+        localStorage.setItem(MEMO_STORAGE_KEY, memo.content);
+        localStorage.setItem(MEMO_UPDATED_KEY, serverTime.toString());
+      }
     }
-  }, [memo]);
+  }, [memo, isEditing]);
 
   useEffect(() => {
     if (isEditing && textAreaRef.current) {
@@ -34,12 +66,17 @@ export default function MemoPage() {
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setContent(newContent);
+    
+    // 立即保存到本地
+    const now = Date.now();
+    localStorage.setItem(MEMO_STORAGE_KEY, newContent);
+    localStorage.setItem(MEMO_UPDATED_KEY, now.toString());
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        await fetch(getApiUrl('/api/widget/memo'), {
+        await fetchWithRetry('/api/widget/memo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: newContent }),

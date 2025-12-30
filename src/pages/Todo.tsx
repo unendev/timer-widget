@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Square, CheckSquare, Trash2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import useSWR, { mutate } from 'swr';
 import { fetcher, getApiUrl } from '@/lib/api';
+
+const TODO_STORAGE_KEY = 'todo-items-v1';
+const TODO_UPDATED_KEY = 'todo-updated-at';
 
 interface TodoItem {
   id: string;
@@ -12,40 +15,80 @@ interface TodoItem {
 }
 
 export default function TodoPage() {
-  const { data: items = [], isLoading } = useSWR<TodoItem[]>('/api/widget/todo', fetcher);
-  const [inputValue, setInputValue] = useState('');
-  const [newGroup, setNewGroup] = useState('');
+  // State for items, initialized from localStorage
+  const [localItems, setLocalItems] = useState<TodoItem[]>(() => {
+    try {
+      const savedItems = localStorage.getItem(TODO_STORAGE_KEY);
+      return savedItems ? JSON.parse(savedItems) : [];
+    } catch (error) {
+      console.error("Failed to parse todo items from localStorage:", error);
+      return [];
+    }
+  });
+
+  const { data: serverItems = [], isLoading } = useSWR<TodoItem[]>("/api/widget/todo", fetcher, {
+    onSuccess: (data) => {
+      // Sync server data to local storage if newer or local is empty
+      const localUpdatedAt = parseInt(localStorage.getItem(TODO_UPDATED_KEY) || "0");
+      const serverUpdatedAt = data.reduce((max, item) => Math.max(max, new Date(item.createdAt).getTime()), 0);
+      
+      if (!localItems.length || serverUpdatedAt > localUpdatedAt) {
+        console.log("Syncing todo items from server (newer version found)");
+        setLocalItems(data);
+        localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(data));
+        localStorage.setItem(TODO_UPDATED_KEY, serverUpdatedAt.toString());
+      }
+    },
+  });
+
+  // Combine local and server data, giving precedence to local changes not yet synced
+  // This can be a more complex merge strategy in a real app, but for now, simple merge
+  const items = useMemo(() => {
+    const serverItemMap = new Map(serverItems.map(item => [item.id, item]));
+    return localItems.map(item => serverItemMap.has(item.id) ? serverItemMap.get(item.id)! : item);
+  }, [localItems, serverItems]);
+
+  const [inputValue, setInputValue] = useState("");
+  const [newGroup, setNewGroup] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['default']));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["default"]));
 
   // 加载展开状态和显示已完成状态（这些仍保留在本地）
   useEffect(() => {
-    const savedExpanded = localStorage.getItem('widget-todo-expanded-groups');
+    const savedExpanded = localStorage.getItem("widget-todo-expanded-groups");
     if (savedExpanded) {
       try {
         setExpandedGroups(new Set(JSON.parse(savedExpanded)));
       } catch (e) {}
     }
-    const savedShowCompleted = localStorage.getItem('widget-todo-show-completed');
+    const savedShowCompleted = localStorage.getItem("widget-todo-show-completed");
     if (savedShowCompleted !== null) {
-      setShowCompleted(savedShowCompleted === 'true');
+      setShowCompleted(savedShowCompleted === "true");
     }
   }, []);
 
   // 持久化 UI 状态
   useEffect(() => {
-    localStorage.setItem('widget-todo-expanded-groups', JSON.stringify(Array.from(expandedGroups)));
+    localStorage.setItem("widget-todo-expanded-groups", JSON.stringify(Array.from(expandedGroups)));
   }, [expandedGroups]);
 
   useEffect(() => {
-    localStorage.setItem('widget-todo-show-completed', String(showCompleted));
+    localStorage.setItem("widget-todo-show-completed", String(showCompleted));
   }, [showCompleted]);
+
+  const updateLocalAndSync = useCallback((newItems: TodoItem[]) => {
+    const now = Date.now();
+    setLocalItems(newItems);
+    localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(newItems));
+    localStorage.setItem(TODO_UPDATED_KEY, now.toString());
+    mutate("/api/widget/todo", newItems, false); // Update SWR cache optimistically
+  }, []);
 
   const handleSubmit = async () => {
     const text = inputValue.trim();
     if (!text) return;
     
-    const groupName = newGroup.trim() || 'default';
+    const groupName = newGroup.trim() || "default";
     
     // 乐观更新
     const newItem: TodoItem = {
@@ -56,56 +99,57 @@ export default function TodoPage() {
       createdAt: new Date().toISOString(),
     };
     
-    mutate('/api/widget/todo', [...items, newItem], false);
-    setInputValue('');
+    const newItems = [...localItems, newItem];
+    updateLocalAndSync(newItems);
+    setInputValue("");
 
     try {
-      await fetch(getApiUrl('/api/widget/todo'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch(getApiUrl("/api/widget/todo"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, group: groupName }),
       });
-      mutate('/api/widget/todo');
-      if (groupName !== 'default') {
+      mutate("/api/widget/todo"); // Revalidate with server data
+      if (groupName !== "default") {
         setExpandedGroups(prev => new Set([...prev, groupName]));
       }
     } catch (err) {
-      console.error('Failed to create todo:', err);
-      mutate('/api/widget/todo');
+      console.error("Failed to create todo:", err);
+      mutate("/api/widget/todo"); // Revert or show error
     }
   };
 
   const toggleTodo = async (id: string, completed: boolean) => {
-    // 乐观更新
-    mutate('/api/widget/todo', items.map(item => 
+    const newItems = localItems.map(item => 
       item.id === id ? { ...item, completed: !completed } : item
-    ), false);
+    );
+    updateLocalAndSync(newItems);
 
     try {
-      await fetch(getApiUrl('/api/widget/todo'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch(getApiUrl("/api/widget/todo"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, completed: !completed }),
       });
-      mutate('/api/widget/todo');
+      mutate("/api/widget/todo"); // Revalidate with server data
     } catch (err) {
-      console.error('Failed to update todo:', err);
-      mutate('/api/widget/todo');
+      console.error("Failed to update todo:", err);
+      mutate("/api/widget/todo"); // Revert or show error
     }
   };
 
   const deleteItem = async (id: string) => {
-    // 乐观更新
-    mutate('/api/widget/todo', items.filter(item => item.id !== id), false);
+    const newItems = localItems.filter(item => item.id !== id);
+    updateLocalAndSync(newItems);
 
     try {
       await fetch(getApiUrl(`/api/widget/todo?id=${id}`), {
-        method: 'DELETE',
+        method: "DELETE",
       });
-      mutate('/api/widget/todo');
+      mutate("/api/widget/todo"); // Revalidate with server data
     } catch (err) {
-      console.error('Failed to delete todo:', err);
-      mutate('/api/widget/todo');
+      console.error("Failed to delete todo:", err);
+      mutate("/api/widget/todo"); // Revert or show error
     }
   };
 
@@ -118,12 +162,12 @@ export default function TodoPage() {
     });
   };
 
-  const groups = [...new Set(items.map(t => t.group))];
-  const activeTodos = items.filter(t => !t.completed);
-  const completedTodos = items.filter(t => t.completed);
+  const groups = [...new Set(items.map((t: TodoItem) => t.group))];
+  const activeTodos = items.filter((t: TodoItem) => !t.completed);
+  const completedTodos = items.filter((t: TodoItem) => t.completed);
 
-  const todosByGroup = groups.reduce((acc, group) => {
-    acc[group] = activeTodos.filter(t => t.group === group);
+  const todosByGroup: Record<string, TodoItem[]> = groups.reduce((acc: Record<string, TodoItem[]>, group: string) => {
+    acc[group] = activeTodos.filter((t: TodoItem) => t.group === group);
     return acc;
   }, {} as Record<string, TodoItem[]>);
 
@@ -151,13 +195,13 @@ export default function TodoPage() {
       <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-3">
         {groups.map(group => {
           const groupTodos = todosByGroup[group] || [];
-          if (groupTodos.length === 0 && group !== 'default') return null;
+          if (groupTodos.length === 0 && group !== "default") return null;
           
           const isExpanded = expandedGroups.has(group);
           
           return (
             <div key={group}>
-              {group !== 'default' && (
+              {group !== "default" && (
                 <button
                   onClick={() => toggleGroup(group)}
                   className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-300 mb-1.5 w-full"
@@ -168,9 +212,9 @@ export default function TodoPage() {
                 </button>
               )}
               
-              {(group === 'default' || isExpanded) && (
+              {(group === "default" || isExpanded) && (
                 <div className="space-y-1.5">
-                  {groupTodos.map(item => (
+                  {groupTodos.map((item: TodoItem) => (
                     <div 
                       key={item.id} 
                       className="group flex items-start gap-2 p-2 bg-zinc-800/50 border border-zinc-700/50 rounded hover:border-zinc-600 transition-colors"
@@ -215,7 +259,7 @@ export default function TodoPage() {
             
             {showCompleted && (
               <div className="space-y-1 pl-2 border-l border-zinc-700/50 ml-1">
-                {completedTodos.map(item => (
+                {completedTodos.map((item: TodoItem) => (
                   <div key={item.id} className="flex items-center gap-2 py-1 text-zinc-500 group">
                     <button onClick={() => toggleTodo(item.id, item.completed)} className="text-emerald-500/70">
                       <CheckSquare className="w-3.5 h-3.5" />
