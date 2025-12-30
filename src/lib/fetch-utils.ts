@@ -1,4 +1,5 @@
 import { getApiUrl } from "./api";
+import { getToken } from "./auth-token";
 
 async function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -11,10 +12,24 @@ export async function fetchWithRetry(
 ): Promise<Response> {
   const delays = [100, 500, 1000];
   const fullUrl = getApiUrl(url);
+
+  // 注入 Bearer Token
+  const token = getToken();
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  
+  const finalOptions = {
+    ...options,
+    headers,
+    // 暂时保留 credentials: 'include' 以兼容旧模式，但 Authorization 是首选
+    credentials: 'include' as RequestCredentials
+  };
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(fullUrl, { ...options, credentials: 'include' });
+      const response = await fetch(fullUrl, finalOptions);
       if (response.ok || (response.status >= 400 && response.status < 500)) {
         return response;
       }

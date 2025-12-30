@@ -4,11 +4,27 @@ const API_BASE_URL = (import.meta.env.DEV || !window.location.protocol.startsWit
   ? '' 
   : (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000');
 
+// 导出 API_BASE_URL 供其他模块（如 main.tsx）使用
+export { API_BASE_URL };
+
+import { getToken } from './auth-token';
+
 export function getApiUrl(path: string): string {
   if (path.startsWith('http')) return path;
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${API_BASE_URL}${normalizedPath}`;
 }
 
-export const fetcher = (url: string) => 
-  fetch(getApiUrl(url), { credentials: 'include' }).then((res) => res.json());
+export const fetcher = async (url: string) => {
+  const token = getToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  
+  const res = await fetch(getApiUrl(url), { 
+    credentials: 'include',
+    headers 
+  });
+  return res.json();
+};

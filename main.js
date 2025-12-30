@@ -9,7 +9,8 @@ const __dirname = path.dirname(__filename);
 app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null);
 
-const isDev = !app.isPackaged;
+// 如果未打包且 NODE_ENV 不为 'production'，则视为开发模式
+const isDev = !app.isPackaged && process.env.NODE_ENV !== 'production';
 const VITE_DEV_SERVER_URL = 'http://localhost:5173';
 
 process.on('uncaughtException', (error) => {
@@ -20,44 +21,13 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Main Process] Unhandled Rejection:', reason);
 });
 
-// 手动拦截并保存 Cookie，解决 file:// 协议下无法保存 localhost Cookie 的问题
+// 内存中缓存 Cookie，用于手动注入 (已废弃，保留变量防止引用报错，可后续删除)
+let cachedSessionCookie = '';
+
 app.on('ready', () => {
   const ses = session.fromPartition('persist:timer-widget');
-  
-  // 拦截所有来自 API 的响应头
-  ses.webRequest.onHeadersReceived(
-    { urls: ['http://localhost:3000/api/*'] },
-    (details, callback) => {
-      const { responseHeaders } = details;
-      if (responseHeaders) {
-        // 获取 Set-Cookie 头（注意处理大小写）
-        const cookies = responseHeaders['set-cookie'] || responseHeaders['Set-Cookie'];
-        if (cookies && cookies.length > 0) {
-          console.log('[Main Process] Intercepted Cookies:', cookies);
-          cookies.forEach(cookieStr => {
-            // 简单的 Cookie 解析
-            const parts = cookieStr.split(';');
-            const [name, value] = parts[0].split('=');
-            if (name && value) {
-              const cookieDetails = {
-                url: 'http://localhost:3000', // 关键：将 Cookie 绑定到 API 域名
-                name: name.trim(),
-                value: value.trim(),
-                // 默认设置一些宽松的属性
-                path: '/',
-                sameSite: 'no_restriction'
-              };
-              
-              ses.cookies.set(cookieDetails)
-                .then(() => console.log(`[Main Process] Saved cookie: ${name}`))
-                .catch((err) => console.error(`[Main Process] Failed to save cookie ${name}:`, err));
-            }
-          });
-        }
-      }
-      callback({ responseHeaders });
-    }
-  );
+  // 已移除 Cookie 拦截器，改用纯 Token 认证方案
+  console.log('[Main Process] Ready (Token Auth Mode)');
 });
 
 const windowStatePath = () => path.join(app.getPath('userData'), 'timer-window-state.json');

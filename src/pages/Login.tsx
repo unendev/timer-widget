@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { useNavigate } from 'react-router-dom';
+import { getApiUrl } from '../lib/api';
+import { setToken } from '../lib/auth-token';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,21 +17,31 @@ export default function LoginPage() {
     setIsLoading(true);
     setError('');
 
+    console.log('[Login] Attempting login...');
+
     try {
-      // 在独立客户端中，我们需要指定 API 基础路径
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-        callbackUrl: '/#/timer',
+      // 使用纯 Token 认证模式
+      const response = await fetch(getApiUrl('/api/auth/token'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (result?.error) {
-        setError('邮箱或密码错误');
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || '登录失败');
+      } else if (data.token) {
+        setToken(data.token);
+        console.log('[Login] Success, token stored');
+        navigate('/timer');
       } else {
-        window.location.href = '/#/timer';
+        setError('登录响应无效');
       }
     } catch (err) {
+      console.error('[Login] Error:', err);
       setError('登录失败，请重试');
     } finally {
       setIsLoading(false);
