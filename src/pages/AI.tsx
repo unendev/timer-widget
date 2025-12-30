@@ -41,7 +41,7 @@ const ReasoningBlock = ({ content, isStreaming = false }: { content: string; isS
       {expanded && (
         <div ref={contentRef} className="px-2 py-1.5 text-[10px] text-zinc-400 border-t border-zinc-700 max-h-32 overflow-y-auto">
           <pre className="whitespace-pre-wrap font-mono leading-relaxed">{content}</pre>
-          {isStreaming && <span className="inline-block w-1 h-2 bg-zinc-400 animate-pulse ml-0.5" />}广告
+          {isStreaming && <span className="inline-block w-1 h-2 bg-zinc-400 animate-pulse ml-0.5" />}
         </div>
       )}
     </div>
@@ -155,47 +155,54 @@ export default function AIPage() {
   // Auto-save current conversation to cloud AND local storage
   const lastSavedMessagesCount = useRef(0);
   useEffect(() => {
-    if (messages.length > lastSavedMessagesCount.current && status === 'ready') {
+    if (messages.length > 0 && status === 'ready' && messages.length > lastSavedMessagesCount.current) {
       const saveSession = async () => {
+        let sessionId = currentSessionId;
+        let isNewSession = !sessionId;
+
+        // If it's a new session, create an ID for it
+        if (isNewSession) {
+          sessionId = `local-${Date.now()}`;
+          setCurrentSessionId(sessionId); // Set the ID immediately to prevent multiple creations
+        }
+
         const firstUserMsg = messages.find(m => m.role === 'user');
         const title = firstUserMsg 
           ? ((firstUserMsg as any).content || (firstUserMsg as any).parts?.find((p: any) => p.type === 'text')?.text || '新对话').slice(0, 20)
           : '新对话';
         
-        const newSession: ChatSession = {
-          id: currentSessionId || `local-${Date.now()}`,
+        const newSessionData: ChatSession = {
+          id: sessionId!,
           title,
           messages: messages,
           updatedAt: new Date().toISOString(),
         };
 
         // Update local sessions immediately
-        const existingIndex = localSessions.findIndex(s => s.id === newSession.id);
+        const existingIndex = localSessions.findIndex(s => s.id === sessionId);
         const updatedLocalSessions = existingIndex > -1
-          ? localSessions.map((s, i) => i === existingIndex ? newSession : s)
-          : [...localSessions, newSession];
+          ? localSessions.map((s, i) => i === existingIndex ? newSessionData : s)
+          : [...localSessions, newSessionData];
         syncSessionsToLocal(updatedLocalSessions);
+        lastSavedMessagesCount.current = messages.length;
 
         try {
-          const method = currentSessionId ? 'PUT' : 'POST';
-          const url = currentSessionId 
-            ? getApiUrl(`/api/widget/ai/sessions?id=${currentSessionId}`)
-            : getApiUrl('/api/widget/ai/sessions');
-
-          await fetch(url, {
-            method: method,
+          const response = await fetch(getApiUrl('/api/widget/ai/sessions'), {
+            method: 'POST', // Always POST, the backend should handle create/update logic (upsert)
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newSession),
+            body: JSON.stringify(newSessionData),
           });
-          mutate('/api/widget/ai/sessions'); // Revalidate with server data
-          lastSavedMessagesCount.current = messages.length;
-          // If it was a new session, update currentSessionId with the server-assigned ID
-          if (!currentSessionId && newSession.id.startsWith('local-')) {
-            // Assuming server returns the created session with a real ID
-            // For simplicity, we might need another SWR revalidation or a more robust ID assignment
-            // For now, we'll let the next SWR fetch handle updating the ID if necessary.
-            // Or, update based on the response if the server sends the ID back.
+
+          if (response.ok) {
+            const savedSession = await response.json();
+            // If it was a new session, update the local ID with the one from the server
+            if (isNewSession && savedSession.id !== sessionId) {
+              setCurrentSessionId(savedSession.id);
+              const finalSessions = updatedLocalSessions.map(s => s.id === sessionId ? savedSession : s);
+              syncSessionsToLocal(finalSessions);
+            }
           }
+          mutate('/api/widget/ai/sessions'); // Revalidate with server data
         } catch (err) {
           console.error('Failed to sync session to cloud:', err);
           mutate('/api/widget/ai/sessions'); // Revert or show error
@@ -298,7 +305,7 @@ export default function AIPage() {
       <>
         {reasoningContent && <ReasoningBlock content={reasoningContent} isStreaming={isReasoningStreaming} />}
         {textContent && <MarkdownView content={textContent} className="text-xs" />}
-        {!reasoningContent && !textContent && '...'}广告
+        {!reasoningContent && !textContent && '...'}
       </>
     );
   };
