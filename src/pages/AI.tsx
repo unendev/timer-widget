@@ -104,6 +104,8 @@ export default function AIPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => localStorage.getItem('widget-ai-current-session-id'));
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const processedToolCalls = useRef<Set<string>>(new Set());
   const previousSessionIdRef = useRef<string | null>(null);
@@ -118,6 +120,15 @@ export default function AIPage() {
     id: currentSessionId || 'widget-ai',
     transport: chatTransport,
   });
+
+  const handleScroll = useCallback(() => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      // Allow a small buffer (e.g. 50px)
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      isAtBottomRef.current = isAtBottom;
+    }
+  }, []);
 
   // Default select the first model and current session
   useEffect(() => {
@@ -137,6 +148,8 @@ export default function AIPage() {
         lastSavedMessagesCount.current = sessionToLoad.messages?.length || 0;
         processedToolCalls.current.clear();
         previousSessionIdRef.current = currentSessionId;
+        // On new session load, we want to scroll to bottom
+        isAtBottomRef.current = true;
       }
     }
   }, [sessions, currentSessionId, setMessages]);
@@ -236,7 +249,9 @@ export default function AIPage() {
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const handleNewChat = () => {
@@ -382,42 +397,36 @@ export default function AIPage() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-6 select-text"
+      >
         {messages.length === 0 && (
-          <div className="text-center text-zinc-500 text-sm py-6">
-            <Bot className="w-6 h-6 mx-auto mb-2 opacity-50" />
+          <div className="text-center text-zinc-500 text-sm py-10">
             <p>有什么可以帮你？</p>
-            <p className="text-xs mt-1 text-zinc-600">可以帮你记备忘录、添加待办</p>
           </div>
         )}
         
         {messages.map(msg => (
-          <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {msg.role === 'assistant' && (
-              <div className="w-5 h-5 rounded bg-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot size={10} className="text-zinc-400" />
-              </div>
-            )}
-            <div className={`max-w-[85%] p-2 rounded text-sm ${msg.role === 'user' ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-800 border border-zinc-700 text-zinc-300'}`}>
+          <div key={msg.id} className="flex flex-col gap-1">
+            <div className={`text-[10px] text-zinc-500 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+              {msg.role === 'user' ? 'You' : selectedModel.name}
+            </div>
+            <div className={`w-full text-sm leading-relaxed ${msg.role === 'user' ? 'text-zinc-300 bg-zinc-800/50 p-2 rounded-lg' : 'text-zinc-100'}`}>
               {msg.role === 'assistant' ? renderMessageContent(msg) : (
-                <span className="text-xs">{(msg as any).content || ((msg as any).parts?.find((p: any) => p.type === 'text') as any)?.text || ''}</span>
+                <span className="whitespace-pre-wrap">{(msg as any).content || ((msg as any).parts?.find((p: any) => p.type === 'text') as any)?.text || ''}</span>
               )}
             </div>
-            {msg.role === 'user' && (
-              <div className="w-5 h-5 rounded bg-zinc-700 flex items-center justify-center shrink-0 mt-0.5">
-                <User size={10} className="text-zinc-400" />
-              </div>
-            )}
           </div>
         ))}
         
         {isLoading && messages[messages.length - 1]?.role === 'user' && (
-          <div className="flex gap-2">
-            <div className="w-5 h-5 rounded bg-zinc-700 flex items-center justify-center">
-              <Loader2 size={10} className="text-zinc-400 animate-spin" />
-            </div>
-            <div className="bg-zinc-800 border border-zinc-700 rounded p-2">
-              <span className="text-xs text-zinc-500">思考中...</span>
+          <div className="flex flex-col gap-1">
+            <div className="text-[10px] text-zinc-500 text-left">AI</div>
+            <div className="flex items-center gap-2 text-zinc-400">
+              <Loader2 size={12} className="animate-spin" />
+              <span className="text-xs">思考中...</span>
             </div>
           </div>
         )}
