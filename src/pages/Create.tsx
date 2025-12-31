@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useSWR from 'swr';
 import CreateLogFormWithCards from '@/components/features/log/CreateLogFormWithCards';
+import SmartCreateLogForm from '@/components/features/log/SmartCreateLogForm';
 import { fetcher } from '@/lib/api';
 import { getUser } from '@/lib/auth-token';
+import { Sparkles, ListTodo } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SessionUser {
   id: string;
@@ -10,6 +13,8 @@ interface SessionUser {
 }
 
 export default function CreatePage() {
+  const [mode, setMode] = useState<'smart' | 'manual'>('smart');
+  
   // 优先从本地读取用户信息（支持离线/弱网）
   const localUser = getUser();
   
@@ -28,7 +33,8 @@ export default function CreatePage() {
     categoryPath: string,
     date: string,
     initialTime?: number,
-    instanceTagNames?: string
+    instanceTagNames?: string,
+    parentId?: string
   ) => {
     // 即使没有 userId，也允许先创建（后续可以由主进程处理或提示）
     // 但为了数据完整性，暂且要求有 userId（本地缓存的也行）
@@ -41,6 +47,7 @@ export default function CreatePage() {
       date: date || today,
       initialTime: initialTime || 0,
       instanceTagNames: instanceTagNames || '',
+      parentId: parentId || null,
       timestamp: Date.now(),
     };
     
@@ -77,22 +84,58 @@ export default function CreatePage() {
 
   return (
     <div className="h-screen text-white overflow-y-auto bg-zinc-900 relative custom-scrollbar">
-      <button
-        onClick={() => window.close()}
-        className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-800 hover:bg-red-500 flex items-center justify-center text-zinc-400 hover:text-white transition-all z-40"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
+      <div className="absolute top-4 right-4 flex items-center gap-2 z-40">
+        <div className="flex bg-zinc-800 p-1 rounded-lg">
+            <button
+                onClick={() => setMode('smart')}
+                className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    mode === 'smart' 
+                        ? "bg-indigo-600 text-white shadow-sm" 
+                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50"
+                )}
+            >
+                <Sparkles size={12} />
+                <span>AI</span>
+            </button>
+            <button
+                onClick={() => setMode('manual')}
+                className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    mode === 'manual' 
+                        ? "bg-zinc-700 text-white shadow-sm" 
+                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50"
+                )}
+            >
+                <ListTodo size={12} />
+                <span>表单</span>
+            </button>
+        </div>
+        <button
+            onClick={() => window.close()}
+            className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-red-500 flex items-center justify-center text-zinc-400 hover:text-white transition-all"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+      </div>
       
-      <div className="p-6 pt-10">
-        <CreateLogFormWithCards
-          onAddToTimer={handleAddToTimer}
-          selectedDate={today}
-          userId={userId}
-        />
+      <div className="p-6 pt-16">
+        {mode === 'smart' ? (
+            <SmartCreateLogForm 
+                onAddToTimer={handleAddToTimer}
+                selectedDate={today}
+                onCancel={() => window.close()}
+            />
+        ) : (
+            <CreateLogFormWithCards
+                onAddToTimer={handleAddToTimer}
+                selectedDate={today}
+                userId={userId}
+            />
+        )}
       </div>
     </div>
   );

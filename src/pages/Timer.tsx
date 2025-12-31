@@ -107,6 +107,7 @@ export default function TimerPage() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       children: [],
+      parentId: taskData.parentId || null, // Added parentId
     };
 
     // 立即更新 UI，让用户感觉到“秒开”
@@ -153,6 +154,7 @@ export default function TimerPage() {
           : (Array.isArray(taskData.instanceTagNames) ? taskData.instanceTagNames : []),
         isRunning: true,
         startTime: now,
+        parentId: taskData.parentId || null, // Added parentId
       };
       
       const createResponse = await fetch(getApiUrl('/api/timer-tasks'), {
