@@ -326,14 +326,6 @@ ipcMain.on('start-task', (event, taskData) => {
   }
 });
 
-// Handle smart create request from Create window to Main window
-ipcMain.on('smart-create-task', (event, data) => {
-  console.log('[Main Process] Received smart-create-task');
-  if (mainWindow) {
-    mainWindow.webContents.send('on-smart-create-task', data);
-  }
-});
-
 app.on('window-all-closed', () => {
   globalShortcut.unregisterAll();
   if (process.platform !== 'darwin') app.quit();
