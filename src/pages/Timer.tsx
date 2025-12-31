@@ -196,34 +196,98 @@ export default function TimerPage() {
 
   useEffect(() => {
     // 1. IPC Listener (Preferred)
-    let unsubscribe: (() => void) | undefined;
+    let unsubscribeStart: (() => void) | undefined;
+    let unsubscribeSmart: (() => void) | undefined;
+    
+    // --- Smart Create Handler Function ---
+    const handleSmartCreate = async (data: { text: string; userId: string }) => {
+      console.log('[Timer] Handling smart create request:', data.text);
+      try {
+          const res = await fetch(getApiUrl('/api/log/smart-create'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: data.text }),
+          });
+          
+          if (!res.ok) throw new Error('AI Parse failed');
+          const aiData = await res.json();
+          
+          console.log('[Timer] AI Parsed Data:', aiData);
+          
+          await handleStartTask({
+              name: aiData.name || data.text,
+              categoryPath: aiData.categoryPath || '未分类',
+              date: today,
+              initialTime: aiData.initialTime || 0,
+              instanceTagNames: aiData.instanceTags || [],
+              userId: data.userId,
+              parentId: aiData.parentId
+          });
+          
+          // Clear the pending item from storage on success
+          localStorage.removeItem('smart-create-pending');
+          
+      } catch (e) {
+          console.error('[Timer] Smart Create Failed:', e);
+          // Keep item in storage for retry
+      }
+    };
+    
     if (window.electron) {
-      console.log('[Timer] Subscribing to IPC on-start-task');
-      unsubscribe = window.electron.receive('on-start-task', (taskData) => {
+      console.log('[Timer] Subscribing to IPC');
+      unsubscribeStart = window.electron.receive('on-start-task', (taskData) => {
+        console.log('[Timer] Received on-start-task via IPC');
         handleStartTask(taskData);
+      });
+      
+      unsubscribeSmart = window.electron.receive('on-smart-create-task', (data: { text: string; userId: string }) => {
+        console.log('[Timer] Received on-smart-create-task via IPC');
+        handleSmartCreate(data);
       });
     }
 
-    // 2. Storage Event (Fallback)
+    // 2. Storage Event (Fallback & Cross-Window-Sync)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'widget-pending-task' && e.newValue) {
         try {
+          console.log('[Timer] Detected storage change for widget-pending-task');
           const taskData = JSON.parse(e.newValue);
-          // 只有当这是新产生的任务（且我们还没处理）时才处理
-          // 这里的逻辑比较简单，只要有变化就尝试处理
           handleStartTask(taskData);
         } catch (err) {
           console.error('[Timer] Storage parse error:', err);
         }
       }
+      if (e.key === 'smart-create-pending' && e.newValue) {
+        try {
+          console.log('[Timer] Detected storage change for smart-create-pending');
+          const data = JSON.parse(e.newValue);
+          handleSmartCreate(data);
+        } catch (err) {
+            console.error('[Timer] Storage parse error for smart create:', err);
+        }
+      }
     };
     
     window.addEventListener('storage', handleStorageChange);
+
+    // 3. Check storage on mount
+    const pendingSmartTask = localStorage.getItem('smart-create-pending');
+    if (pendingSmartTask) {
+        try {
+            console.log('[Timer] Found pending smart task on mount, retrying...');
+            const data = JSON.parse(pendingSmartTask);
+            setTimeout(() => handleSmartCreate(data), 500); // Delay to avoid race conditions
+        } catch(e) {
+            localStorage.removeItem('smart-create-pending');
+        }
+    }
+    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      if (unsubscribe) unsubscribe();
+      if (unsubscribeStart) unsubscribeStart();
+      if (unsubscribeSmart) unsubscribeSmart();
     };
-  }, [handleStartTask]);
+  }, [handleStartTask, today]);
 
   const { startTimer, pauseTimer } = useTimerControl({
     tasks,

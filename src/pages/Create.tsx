@@ -125,8 +125,18 @@ export default function CreatePage() {
       <div className="p-6 pt-16">
         {mode === 'smart' ? (
             <SmartCreateLogForm 
-                onAddToTimer={handleAddToTimer}
-                selectedDate={today}
+                onSmartCreate={(input) => {
+                    const payload = { text: input, userId, timestamp: Date.now() };
+                    
+                    console.log('[Create Page] Writing to localStorage: smart-create-pending');
+                    localStorage.setItem('smart-create-pending', JSON.stringify(payload));
+                    
+                    console.log('[Create Page] Sending smart-create-task via IPC');
+                    if (window.electron) {
+                        window.electron.send('smart-create-task', payload);
+                    }
+                    setTimeout(() => window.close(), 100);
+                }}
                 onCancel={() => window.close()}
             />
         ) : (

@@ -5,14 +5,12 @@ import { Loader2, Sparkles, Send, Keyboard } from 'lucide-react';
 import { getApiUrl } from '@/lib/api';
 
 interface SmartCreateLogFormProps {
-  onAddToTimer?: (taskName: string, categoryPath: string, date: string, initialTime?: number, instanceTagNames?: string, parentId?: string) => Promise<void>;
-  selectedDate?: string;
+  onSmartCreate?: (input: string) => void;
   onCancel?: () => void;
 }
 
-export default function SmartCreateLogForm({ onAddToTimer, selectedDate, onCancel }: SmartCreateLogFormProps) {
+export default function SmartCreateLogForm({ onSmartCreate, onCancel }: SmartCreateLogFormProps) {
   const [input, setInput] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -21,43 +19,12 @@ export default function SmartCreateLogForm({ onAddToTimer, selectedDate, onCance
     }
   }, []);
 
-  const handleSubmit = async () => {
-    if (!input.trim() || !onAddToTimer) return;
-
-    setIsAnalyzing(true);
-    try {
-      // Use getApiUrl to handle localhost:3000
-      const res = await fetch(getApiUrl('/api/log/smart-create'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: input, 
-          date: selectedDate 
-        }),
-      });
-
-      if (!res.ok) throw new Error('AI Parse failed');
-      
-      const data = await res.json();
-      const tagsString = data.instanceTags?.join(',') || '';
-      
-      await onAddToTimer(
-        data.name || input,
-        data.categoryPath || '未分类',
-        selectedDate || new Date().toISOString().split('T')[0],
-        data.initialTime,
-        tagsString,
-        data.parentId
-      );
-      
-      setInput('');
-
-    } catch (error) {
-      console.error('Smart Create failed:', error);
-      // alert('AI 解析失败，请重试或使用手动模式');
-    } finally {
-      setIsAnalyzing(false);
-    }
+  const handleSubmit = () => {
+    if (!input.trim() || !onSmartCreate) return;
+    onSmartCreate(input);
+    setInput('');
+    // Do NOT call onCancel here if onSmartCreate exists. 
+    // Let the parent handle the closing logic (e.g., waiting for IPC).
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -104,20 +71,13 @@ export default function SmartCreateLogForm({ onAddToTimer, selectedDate, onCance
         </Button>
         <Button
           onClick={handleSubmit}
-          disabled={isAnalyzing || !input.trim()}
+          disabled={!input.trim()}
           className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-6 rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg"
         >
-          {isAnalyzing ? (
-            <div className="flex items-center justify-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span>AI 思考中...</span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center gap-2">
-              <Send className="w-5 h-5" />
-              <span>立即创建</span>
-            </div>
-          )}
+          <div className="flex items-center justify-center gap-2">
+            <Send className="w-5 h-5" />
+            <span>立即创建</span>
+          </div>
         </Button>
       </div>
     </div>
