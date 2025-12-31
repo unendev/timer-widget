@@ -62,13 +62,69 @@ export default function TimerPage() {
     fetcher,
     { refreshInterval: 5000, revalidateOnFocus: false, dedupingInterval: 2000 }
   );
+
+  // 递归查找所有运行中的任务（包括子任务）
+  const findAllRunningTasks = useCallback((taskList: TimerTask[]): TimerTask[] => {
+    const running: TimerTask[] = [];
+    for (const task of taskList) {
+      if (task.isRunning && !task.isPaused) {
+        running.push(task);
+      }
+      if (task.children && task.children.length > 0) {
+        running.push(...findAllRunningTasks(task.children));
+      }
+    }
+    return running;
+  }, []);
+
+  // 递归停止任务状态
+  const stopTasksRecursive = useCallback((taskList: TimerTask[]): TimerTask[] => {
+    return taskList.map(task => {
+      const updatedChildren = task.children ? stopTasksRecursive(task.children) : [];
+      if (task.isRunning) {
+        return { ...task, isRunning: false, startTime: null, children: updatedChildren };
+      }
+      return { ...task, children: updatedChildren };
+    });
+  }, []);
   
   const handleStartTask = useCallback(async (taskData: any) => {
     console.log('[Timer] Processing start-task:', taskData.name);
+    
+    // 1. 本地乐观更新 (Optimistic UI)
+    const now = Math.floor(Date.now() / 1000);
+    const optimisticTask: TimerTask = {
+      id: `temp-${Date.now()}`,
+      name: taskData.name,
+      categoryPath: taskData.categoryPath || '未分类',
+      instanceTag: typeof taskData.instanceTagNames === 'string' ? taskData.instanceTagNames : '',
+      initialTime: taskData.initialTime || 0,
+      elapsedTime: taskData.initialTime || 0,
+      isRunning: true,
+      startTime: now,
+      isPaused: false,
+      pausedTime: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      children: [],
+    };
+
+    // 立即更新 UI，让用户感觉到“秒开”
+    await mutateTasks((currentTasks) => {
+      const current = currentTasks || [];
+      // 递归停止所有正在运行的任务
+      const stoppedTasks = stopTasksRecursive(current);
+      return [optimisticTask, ...stoppedTasks];
+    }, false);
+
+    // 2. 备份到 LocalStorage (容错)
+    localStorage.setItem('widget-pending-task', JSON.stringify(taskData));
+
     try {
-      const now = Math.floor(Date.now() / 1000);
+      // 3. 后台同步
+      // 使用递归查找确保找到所有层级的运行任务
+      const runningTasks = findAllRunningTasks(tasks);
       
-      const runningTasks = tasks.filter(t => t.isRunning);
       if (runningTasks.length > 0) {
         await Promise.all(runningTasks.map(task =>
           fetch(getApiUrl('/api/timer-tasks'), {
@@ -107,18 +163,34 @@ export default function TimerPage() {
       });
       
       if (!createResponse.ok) {
-        const errText = await createResponse.text();
-        console.error('[Timer] Failed to create task:', errText);
+        throw new Error(await createResponse.text());
       } else {
          console.log('[Timer] Task created successfully');
-         localStorage.removeItem('widget-pending-task');
-         setTimeout(() => mutateTasks(), 100);
+         localStorage.removeItem('widget-pending-task'); // 同步成功，移除备份
+         mutateTasks(); // 重新验证，获取真实 ID
       }
     } catch (err) {
       console.error('[Timer] Error processing start-task:', err);
-      localStorage.removeItem('widget-pending-task');
+      // 注意：出错时不移除 widget-pending-task，保留以供重试
+      // 这里的乐观状态会被 SWR 的下一次自动验证冲掉，变回原样（符合预期，提示失败）
+      // 但数据留在了 LocalStorage
     }
   }, [tasks, mutateTasks]);
+
+  // 启动时检查是否有未完成的任务 (Retry Pending Task)
+  useEffect(() => {
+    const pendingTask = localStorage.getItem('widget-pending-task');
+    if (pendingTask) {
+      try {
+        console.log('[Timer] Found pending task, retrying...');
+        const taskData = JSON.parse(pendingTask);
+        // 稍微延迟，避免和 SWR 初始化冲突
+        setTimeout(() => handleStartTask(taskData), 1000);
+      } catch (e) {
+        localStorage.removeItem('widget-pending-task');
+      }
+    }
+  }, []); // Run once on mount
 
   useEffect(() => {
     // 1. IPC Listener (Preferred)
@@ -135,6 +207,8 @@ export default function TimerPage() {
       if (e.key === 'widget-pending-task' && e.newValue) {
         try {
           const taskData = JSON.parse(e.newValue);
+          // 只有当这是新产生的任务（且我们还没处理）时才处理
+          // 这里的逻辑比较简单，只要有变化就尝试处理
           handleStartTask(taskData);
         } catch (err) {
           console.error('[Timer] Storage parse error:', err);

@@ -106,30 +106,7 @@ export default function AIPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const processedToolCalls = useRef<Set<string>>(new Set());
-
-  // Default select the first model and current session
-  useEffect(() => {
-    const model = localStorage.getItem('widget-ai-model');
-    if (model && MODELS.find(m => m.id === model)) {
-      setSelectedModelId(model);
-    }
-    // Load current session messages if currentSessionId is set
-    if (currentSessionId) {
-      const sessionToLoad = sessions.find(s => s.id === currentSessionId);
-      if (sessionToLoad) {
-        setMessages(sessionToLoad.messages || []);
-        lastSavedMessagesCount.current = sessionToLoad.messages?.length || 0;
-      }
-    }
-  }, [sessions, currentSessionId]);
-
-  useEffect(() => {
-    if (currentSessionId) {
-      localStorage.setItem('widget-ai-current-session-id', currentSessionId);
-    } else {
-      localStorage.removeItem('widget-ai-current-session-id');
-    }
-  }, [currentSessionId]);
+  const previousSessionIdRef = useRef<string | null>(null);
 
   const selectedModel = MODELS.find(m => m.id === selectedModelId) || MODELS[0];
 
@@ -141,6 +118,36 @@ export default function AIPage() {
     id: currentSessionId || 'widget-ai',
     transport: chatTransport,
   });
+
+  // Default select the first model and current session
+  useEffect(() => {
+    const model = localStorage.getItem('widget-ai-model');
+    if (model && MODELS.find(m => m.id === model)) {
+      setSelectedModelId(model);
+    }
+    // Load current session messages if currentSessionId is set
+    if (currentSessionId) {
+      const sessionToLoad = sessions.find(s => s.id === currentSessionId);
+      
+      const isSessionSwitch = currentSessionId !== previousSessionIdRef.current;
+      const isInitialLoad = !previousSessionIdRef.current;
+      
+      if (sessionToLoad && (isSessionSwitch || isInitialLoad)) {
+        setMessages(sessionToLoad.messages || []);
+        lastSavedMessagesCount.current = sessionToLoad.messages?.length || 0;
+        processedToolCalls.current.clear();
+        previousSessionIdRef.current = currentSessionId;
+      }
+    }
+  }, [sessions, currentSessionId, setMessages]);
+
+  useEffect(() => {
+    if (currentSessionId) {
+      localStorage.setItem('widget-ai-current-session-id', currentSessionId);
+    } else {
+      localStorage.removeItem('widget-ai-current-session-id');
+    }
+  }, [currentSessionId]);
 
   const isLoading = status === 'streaming' || status === 'submitted';
 

@@ -147,6 +147,10 @@ function createToolWindow(type, existingWindow) {
     `);
   });
 
+  win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Main Process] ${type} window failed to load: ${validatedURL} (${errorCode}: ${errorDescription})`);
+  });
+
   return win;
 }
 

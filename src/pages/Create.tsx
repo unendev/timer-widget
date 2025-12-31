@@ -2,6 +2,7 @@ import React from 'react';
 import useSWR from 'swr';
 import CreateLogFormWithCards from '@/components/features/log/CreateLogFormWithCards';
 import { fetcher } from '@/lib/api';
+import { getUser } from '@/lib/auth-token';
 
 interface SessionUser {
   id: string;
@@ -9,13 +10,17 @@ interface SessionUser {
 }
 
 export default function CreatePage() {
+  // 优先从本地读取用户信息（支持离线/弱网）
+  const localUser = getUser();
+  
   const { data: sessionData, isLoading } = useSWR<{ user?: SessionUser }>(
     '/api/auth/session',
     fetcher,
     { revalidateOnFocus: false }
   );
   
-  const userId = sessionData?.user?.id;
+  // 如果 API 还没返回，优先使用本地缓存的 User ID
+  const userId = sessionData?.user?.id || localUser?.id;
   const today = new Date().toISOString().split('T')[0];
 
   const handleAddToTimer = async (
@@ -25,6 +30,8 @@ export default function CreatePage() {
     initialTime?: number,
     instanceTagNames?: string
   ) => {
+    // 即使没有 userId，也允许先创建（后续可以由主进程处理或提示）
+    // 但为了数据完整性，暂且要求有 userId（本地缓存的也行）
     if (!userId) return;
     
     const taskData = {
@@ -51,7 +58,8 @@ export default function CreatePage() {
     setTimeout(() => window.close(), 100);
   };
 
-  if (isLoading) {
+  // 如果本地有用户，就不显示 Loading，直接渲染界面
+  if (isLoading && !userId) {
     return (
       <div className="flex items-center justify-center h-screen bg-zinc-900">
         <span className="text-sm text-emerald-400 font-medium">正在准备...</span>
