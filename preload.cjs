@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electron', {
   send: (channel, data) => {
     // whitelist channels
-    let validChannels = ['start-task', 'open-window'];
+    let validChannels = ['start-task', 'open-window', 'ai-create-task'];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     }

@@ -49,10 +49,10 @@ function useDoubleTap(callback: () => void, delay = 300) {
 export default function TimerPage() {
   const doubleTapCreate = useDoubleTap(openCreateWindow);
   const [isBlurred, setIsBlurred] = useState(false);
-  
+
   const user = getUser();
   const userId = user?.id;
-  
+
   // 恢复日期过滤，只显示今天的任务（保持界面简洁）
   const today = new Date().toISOString().split('T')[0];
   const apiUrl = userId ? `/api/timer-tasks?userId=${userId}&date=${today}` : null;
@@ -87,10 +87,10 @@ export default function TimerPage() {
       return { ...task, children: updatedChildren };
     });
   }, []);
-  
+
   const handleStartTask = useCallback(async (taskData: any) => {
     console.log('[Timer] Processing start-task:', taskData.name);
-    
+
     // 1. 本地乐观更新 (Optimistic UI)
     const now = Math.floor(Date.now() / 1000);
     const optimisticTask: TimerTask = {
@@ -125,7 +125,7 @@ export default function TimerPage() {
       // 3. 后台同步
       // 使用递归查找确保找到所有层级的运行任务
       const runningTasks = findAllRunningTasks(tasks);
-      
+
       if (runningTasks.length > 0) {
         await Promise.all(runningTasks.map(task =>
           fetch(getApiUrl('/api/timer-tasks'), {
@@ -141,35 +141,37 @@ export default function TimerPage() {
           })
         ));
       }
-      
+
       const createBody = {
         name: taskData.name,
-        userId: taskData.userId,
+        userId: taskData.userId || userId, // Fallback to current user
         categoryPath: taskData.categoryPath,
-        date: taskData.date,
-        initialTime: taskData.initialTime,
-        elapsedTime: taskData.initialTime,
-        instanceTagNames: typeof taskData.instanceTagNames === 'string' 
-          ? taskData.instanceTagNames.split(',').map((t: string) => t.trim()).filter((t: string) => t)
-          : (Array.isArray(taskData.instanceTagNames) ? taskData.instanceTagNames : []),
+        date: taskData.date || today, // Fallback to today
+        initialTime: taskData.initialTime || 0,
+        elapsedTime: taskData.initialTime || 0,
+        instanceTagNames: taskData.instanceTagNames
+          ? (typeof taskData.instanceTagNames === 'string'
+            ? taskData.instanceTagNames.split(',').map((t: string) => t.trim()).filter((t: string) => t)
+            : taskData.instanceTagNames)
+          : (taskData.instanceTags || []), // Map AI instanceTags
         isRunning: true,
         startTime: now,
-        parentId: taskData.parentId || null, // Added parentId
+        parentId: taskData.parentId || null,
       };
-      
+
       const createResponse = await fetch(getApiUrl('/api/timer-tasks'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(createBody),
       });
-      
+
       if (!createResponse.ok) {
         throw new Error(await createResponse.text());
       } else {
-         console.log('[Timer] Task created successfully');
-         localStorage.removeItem('widget-pending-task'); // 同步成功，移除备份
-         mutateTasks(); // 重新验证，获取真实 ID
+        console.log('[Timer] Task created successfully');
+        localStorage.removeItem('widget-pending-task'); // 同步成功，移除备份
+        mutateTasks(); // 重新验证，获取真实 ID
       }
     } catch (err) {
       console.error('[Timer] Error processing start-task:', err);
@@ -197,7 +199,7 @@ export default function TimerPage() {
   useEffect(() => {
     // 1. IPC Listener (Preferred)
     let unsubscribeStart: (() => void) | undefined;
-    
+
     if (window.electron) {
       console.log('[Timer] Subscribing to IPC');
       unsubscribeStart = window.electron.receive('on-start-task', (taskData) => {
@@ -216,7 +218,7 @@ export default function TimerPage() {
         }
       }
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -277,8 +279,8 @@ export default function TimerPage() {
     return (
       <div className="flex flex-col items-center justify-center w-full h-full bg-[#1a1a1a] text-zinc-400 gap-3 p-4">
         <span className="text-sm">请先登录</span>
-        <Link 
-          to="/login" 
+        <Link
+          to="/login"
           className="text-sm text-emerald-400 hover:text-emerald-300 underline"
           onClick={() => console.log('[Navigation] Clicking login link')}
         >
@@ -314,7 +316,7 @@ export default function TimerPage() {
               >
                 {activeTask.isPaused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
               </button>
-              <div 
+              <div
                 className={`flex-1 min-w-0 cursor-pointer transition-all ${activeTask.isPaused ? 'text-yellow-400' : 'text-emerald-400'}`}
                 onClick={() => setIsBlurred(!isBlurred)}
                 {...doubleTapCreate}
@@ -334,14 +336,14 @@ export default function TimerPage() {
               <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 shrink-0" data-drag="false">
                 <Play size={18} />
               </div>
-              <div 
+              <div
                 className="flex-1 min-w-0 cursor-pointer"
                 onClick={() => setIsBlurred(!isBlurred)}
                 {...doubleTapCreate}
                 title="单击模糊 / 双击新建"
                 data-drag="false"
               >
-                 <div className={`transition-all ${isBlurred ? 'blur-md' : ''}`}>
+                <div className={`transition-all ${isBlurred ? 'blur-md' : ''}`}>
                   <div className="font-mono text-2xl font-bold text-zinc-600">00:00:00</div>
                   <div className="text-xs text-zinc-600">双击新建任务</div>
                 </div>
@@ -352,7 +354,7 @@ export default function TimerPage() {
             <GripVertical size={16} />
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto px-3 pb-3">
           <div className="grid grid-cols-2 gap-2">
             {recentTasks.map((task) => (

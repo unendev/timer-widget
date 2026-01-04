@@ -4,8 +4,8 @@ import { getApiUrl } from '../lib/api';
 import { setToken, setUser } from '../lib/auth-token';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('a1634358912@gmail.com');
+  const [password, setPassword] = useState('Mw!vc_18$');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -29,20 +29,32 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const rawBody = await response.text();
+      let data: { token?: string; user?: unknown; error?: string } | null = null;
+      if (rawBody) {
+        try {
+          data = JSON.parse(rawBody);
+        } catch {
+          data = null;
+        }
+      }
 
       if (!response.ok) {
-        setError(data.error || '登录失败');
-      } else if (data.token) {
+        setError(data?.error || '登录失败');
+        return;
+      }
+
+      if (data?.token) {
         setToken(data.token);
         if (data.user) {
           setUser(data.user);
         }
         console.log('[Login] Success, token stored');
         navigate('/timer');
-      } else {
-        setError('登录响应无效');
+        return;
       }
+
+      setError('登录响应无效');
     } catch (err) {
       console.error('[Login] Error:', err);
       setError('登录失败，请重试');

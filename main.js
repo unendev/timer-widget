@@ -53,7 +53,7 @@ const saveWindowState = (win) => {
   try {
     const { width, height, x, y } = win.getBounds();
     fs.writeFileSync(windowStatePath(), JSON.stringify({ width, height, x, y }));
-  } catch (error) {}
+  } catch (error) { }
 };
 
 const normalizeBounds = (bounds, minWidth, minHeight) => {
@@ -323,6 +323,49 @@ ipcMain.on('start-task', (event, taskData) => {
   console.log('[Main Process] Received start-task:', taskData.name);
   if (mainWindow) {
     mainWindow.webContents.send('on-start-task', taskData);
+  }
+});
+
+// Handle AI task creation from Create window (Fire and Forget)
+ipcMain.on('ai-create-task', async (event, { text, userId, autoStart }) => {
+  console.log('🤖 [Main Process] Received ai-create-task:', text);
+
+  // 1. Defensively check for backend availability or just try/catch
+  try {
+    const response = await fetch('http://localhost:10000/api/timer-tasks/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [Main Process] AI API Error:', response.status, errorText);
+      return;
+    }
+
+    const parsed = await response.json();
+    console.log('✅ [Main Process] AI Parsed Result:', parsed);
+
+    if (mainWindow) {
+      // Construct the task object
+      const taskData = {
+        name: parsed.name,
+        userId: userId || 'user-1', // Fallback
+        categoryPath: parsed.categoryPath,
+        date: new Date().toISOString().split('T')[0], // Today
+        initialTime: 0,
+        instanceTagNames: parsed.instanceTags ? parsed.instanceTags.join(',') : '',
+        timestamp: Date.now(),
+        autoStart: autoStart
+      };
+
+      console.log('🚀 [Main Process] Starting parsed task:', taskData.name);
+      mainWindow.webContents.send('on-start-task', taskData);
+    }
+
+  } catch (error) {
+    console.error('❌ [Main Process] AI Processing Exception:', error);
   }
 });
 
